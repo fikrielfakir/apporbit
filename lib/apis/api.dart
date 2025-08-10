@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:pos_final/api_end_points.dart';
+import 'package:pos_final/apis/stock_transfer.dart';
 import '../config.dart';
 import '../pages/login/login_screen.dart';
 
@@ -10,22 +11,20 @@ class Api {
   final String apiUrl = ApiEndPoints.apiUrl;
   final String clientId = Config().clientId;
   final String clientSecret = Config().clientSecret;
+  late final StockTransferApi stockTransfer;
+
+  Api() {
+    stockTransfer = StockTransferApi(this);
+  }
+
+
 
   // Global navigator key to access navigation from anywhere
   static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-  /// Authenticates a user with the provided credentials
-  /// Returns a map with success status and either token or error message
+
   Future<Map<String, dynamic>> login(String username, String password) async {
     final url = ApiEndPoints.loginUrl;
-
-    final body = {
-      'grant_type': 'password',
-      'client_id': clientId,
-      'client_secret': clientSecret,
-      'username': username,
-      'password': password,
-    };
 
     try {
       final response = await http.post(
@@ -34,20 +33,43 @@ class Api {
           'Accept': 'application/json',
           'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: body,
+        body: {
+          'grant_type': 'password',
+          'client_id': clientId,
+          'client_secret': clientSecret,
+          'username': username,
+          'password': password,
+          'scope': '',
+        },
       );
 
-      final jsonResponse = jsonDecode(response.body);
+      final responseBody = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
-        return {'success': true, 'access_token': jsonResponse['access_token']};
-      } else if (response.statusCode == 401) {
-        return {'success': false, 'error': jsonResponse['error']};
+        return {
+          'success': true,
+          'access_token': responseBody['access_token'],
+          'refresh_token': responseBody['refresh_token'],
+        };
       } else {
-        return {'success': false, 'error': 'Unknown error: ${response.statusCode}'};
+        return {
+          'success': false,
+          'error': responseBody['error'] ?? 'authentication_error',
+          'message': responseBody['message'] ?? 'Invalid credentials',
+        };
       }
+    } on http.ClientException catch (e) {
+      return {
+        'success': false,
+        'error': 'network_error',
+        'message': 'Network error occurred',
+      };
     } catch (e) {
-      return {'success': false, 'error': e.toString()};
+      return {
+        'success': false,
+        'error': 'unknown_error',
+        'message': 'An unexpected error occurred',
+      };
     }
   }
 

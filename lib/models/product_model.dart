@@ -1,6 +1,7 @@
 class ProductModel {
   var productMap;
 
+
   product(element, price) {
     productMap = {
       'variation_id': element['variation_id'],

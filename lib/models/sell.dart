@@ -29,6 +29,7 @@ class Sell {
           'discount_amount': element['discount_amount'],
           'discount_type': element['discount_type'],
           'change_return': element['change_return'],
+          'return_amount': element['return_amount'] ?? 0.00, // Ensure default value
           'products': products,
           'sale_note': element['sale_note'],
           'staff_note': element['staff_note'],
@@ -36,8 +37,8 @@ class Sell {
           'shipping_details': element['shipping_details'],
           'is_quotation': element['is_quotation'],
           'payments': await PaymentDatabase().get(element['id']),
-          'latitude': element['latitude'], // إضافة خط العرض
-          'longitude': element['longitude'], // إضافة خط الطول
+          'latitude': element['latitude'],
+          'longitude': element['longitude'],
         }
       ];
 
@@ -63,12 +64,13 @@ class Sell {
         'shipping_details': element['shipping_details'],
         'is_quotation': element['is_quotation'],
         'change_return': element['change_return'],
+        'return_amount': element['return_amount'] ?? 0.00, // Ensure default value
         'change_return_id': returnId,
         'products': products,
         'payments': await PaymentDatabase()
             .getPaymentLineByReturnValue(element['id'], 0),
-        'latitude': element['latitude'], // إضافة خط العرض
-        'longitude': element['longitude'], // إضافة خط الطول
+        'latitude': element['latitude'],
+        'longitude': element['longitude'],
       };
       if (element['is_synced'] == 0) {
         if (element['transaction_id'] != null) {
@@ -151,6 +153,7 @@ class Sell {
         double? discountAmount,
         double? invoiceAmount,
         double? changeReturn,
+        double? returnAmount, // Explicit parameter
         double? pending,
         String? saleNote,
         String? staffNote,
@@ -159,11 +162,10 @@ class Sell {
         String? saleStatus,
         int? isQuotation,
         int? sellId,
-        double? latiTude, // إضافة خط العرض
-        double? longiTude}) async { // إضافة خط الطول
+        double? latiTude,
+        double? longiTude}) async {
     Map<String, dynamic> sale;
     if (sellId == null) {
-      //TODO:dynamic customer name and location name
       sale = {
         'transaction_date': transactionDate,
         'invoice_no': invoiceNo,
@@ -175,6 +177,7 @@ class Sell {
         'discount_type': discountType,
         'invoice_amount': invoiceAmount,
         'change_return': changeReturn,
+        'return_amount': returnAmount ?? 0.00, // Ensure default value
         'sale_note': saleNote,
         'staff_note': staffNote,
         'shipping_charges': shippingCharges,
@@ -182,8 +185,8 @@ class Sell {
         'pending_amount': pending,
         'is_quotation': isQuotation ?? 0,
         'is_synced': 0,
-        'latitude': latiTude, // إضافة خط العرض
-        'longitude': longiTude, // إضافة خط الطول
+        'latitude': latiTude,
+        'longitude': longiTude,
       };
       return sale;
     } else {
@@ -197,6 +200,7 @@ class Sell {
         'discount_type': discountType,
         'invoice_amount': invoiceAmount,
         'change_return': changeReturn,
+        'return_amount': returnAmount ?? 0.00, // Added return_amount
         'sale_note': saleNote,
         'staff_note': staffNote,
         'shipping_charges': shippingCharges,
@@ -204,8 +208,8 @@ class Sell {
         'pending_amount': pending,
         'is_quotation': isQuotation ?? 0,
         'is_synced': 0,
-        'latitude': latiTude, // إضافة خط العرض
-        'longitude': longiTude, // إضافة خط الطول
+        'latitude': latiTude,
+        'longitude': longiTude,
       };
       return sale;
     }
@@ -225,13 +229,7 @@ class Sell {
     return price;
   }
 
-/*
-*  x + (x*15/100) = 575;
-* 100x + 15x = 57500;
-* x = 57500/115;
-* */
-
-//toMap create sellLine
+  //toMap create sellLine
   addToCart(product, sellId) async {
     //convert product to create sellLine
     double price =
@@ -292,14 +290,15 @@ class Sell {
       'discount_type': sell['discount_type'],
       'invoice_amount': sell['final_total'],
       'change_return': change,
+      'return_amount': sell['return_amount'] ?? 0.00, // Added return_amount
       'sale_note': sell['additional_notes'],
       'staff_note': sell['staff_note'],
       'shipping_charges': double.parse(sell['shipping_charges']),
       'shipping_details': sell['shipping_details'],
       'pending_amount': pending,
       'is_synced': 1,
-      'latitude': sell['latitude'], // إضافة خط العرض
-      'longitude': sell['longitude'], // إضافة خط الطول
+      'latitude': sell['latitude'],
+      'longitude': sell['longitude'],
     };
     return sale;
   }

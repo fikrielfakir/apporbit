@@ -1,5 +1,3 @@
-// import 'package:call_log/call_log.dart';
-
 import 'dart:convert';
 import 'dart:io';
 
@@ -37,18 +35,20 @@ class _VisitFormState extends State<VisitForm> {
   final ImagePicker _picker = ImagePicker();
   final _formKey = GlobalKey<FormState>();
   LatLng? currentLoc;
+  double returnAmount = 0.0;
+  TextEditingController returnAmountController = TextEditingController();
 
-  TextEditingController reasonController = new TextEditingController(),
-      meetWith = new TextEditingController(),
-      meetMobile = new TextEditingController(),
-      meetDesignation = new TextEditingController(),
-      meetWith2 = new TextEditingController(),
-      meetMobile2 = new TextEditingController(),
-      meetDesignation2 = new TextEditingController(),
-      meetWith3 = new TextEditingController(),
-      meetMobile3 = new TextEditingController(),
-      meetDesignation3 = new TextEditingController(),
-      discussionController = new TextEditingController();
+  TextEditingController reasonController = TextEditingController(),
+      meetWith = TextEditingController(),
+      meetMobile = TextEditingController(),
+      meetDesignation = TextEditingController(),
+      meetWith2 = TextEditingController(),
+      meetMobile2 = TextEditingController(),
+      meetDesignation2 = TextEditingController(),
+      meetWith3 = TextEditingController(),
+      meetMobile3 = TextEditingController(),
+      meetDesignation3 = TextEditingController(),
+      discussionController = TextEditingController();
 
   static int themeType = 1;
   ThemeData themeData = AppTheme.getThemeFromThemeMode(themeType);
@@ -58,6 +58,7 @@ class _VisitFormState extends State<VisitForm> {
   void initState() {
     super.initState();
     visitStatus = widget.visit['status'];
+    returnAmountController.text = "0.00";
   }
 
   @override
@@ -78,617 +79,676 @@ class _VisitFormState extends State<VisitForm> {
         child: (isLoading)
             ? Helper().loadingIndicator(context)
             : Form(
-                key: _formKey,
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Row(
+                children: [
+                  Text(
+                    AppLocalizations.of(context)
+                        .translate('Did_you_meet_with_the_contact'),
+                    style: AppTheme.getTextStyle(
+                      themeData.textTheme.headline6,
+                      fontWeight: 600,
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  Radio(
+                    value: 'met_contact',
+                    groupValue: visitStatus,
+                    onChanged: (String? value) {
+                      setState(() {
+                        visitStatus = value!;
+                      });
+                    },
+                    toggleable: true,
+                  ),
+                  Padding(
+                    padding: EdgeInsets.all(MySize.size6!),
+                    child: Text(
+                      AppLocalizations.of(context).translate('yes'),
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.all(MySize.size14!),
+                  ),
+                  Radio(
+                    value: 'did_not_meet_contact',
+                    groupValue: visitStatus,
+                    onChanged: (String? value) {
+                      setState(() {
+                        visitStatus = value!;
+                      });
+                    },
+                    toggleable: true,
+                  ),
+                  Padding(
+                    padding: EdgeInsets.all(MySize.size6!),
+                    child: Text(
+                        AppLocalizations.of(context).translate('no')),
+                  )
+                ],
+              ),
+              Visibility(
+                visible: (visitStatus == 'did_not_meet_contact'),
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Row(
-                      children: [
-                        Text(
-                          AppLocalizations.of(context)
-                              .translate('Did_you_meet_with_the_contact'),
-                          style: AppTheme.getTextStyle(
-                            themeData.textTheme.headline6,
-                            fontWeight: 600,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        Radio(
-                          value: 'met_contact',
-                          groupValue: visitStatus,
-                          onChanged: (String? value) {
-                            setState(() {
-                              visitStatus = value!;
-                            });
-                          },
-                          toggleable: true,
-                        ),
-                        Padding(
-                          padding: EdgeInsets.all(MySize.size6!),
-                          child: Text(
-                            AppLocalizations.of(context).translate('yes'),
-                          ),
-                        ),
-                        Padding(
-                          padding: EdgeInsets.all(MySize.size14!),
-                        ),
-                        Radio(
-                          value: 'did_not_meet_contact',
-                          groupValue: visitStatus,
-                          onChanged: (String? value) {
-                            setState(() {
-                              visitStatus = value!;
-                            });
-                          },
-                          toggleable: true,
-                        ),
-                        Padding(
-                          padding: EdgeInsets.all(MySize.size6!),
-                          child: Text(
-                              AppLocalizations.of(context).translate('no')),
-                        )
-                      ],
-                    ),
-                    Visibility(
-                      visible: (visitStatus == 'did_not_meet_contact'),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "${AppLocalizations.of(context).translate('reason')} : ",
-                            style: AppTheme.getTextStyle(
-                              themeData.textTheme.subtitle1,
-                              fontWeight: 600,
-                            ),
-                          ),
-                          Padding(
-                            padding: EdgeInsets.only(
-                                top: MySize.size4!, bottom: MySize.size10!),
-                            child: TextFormField(
-                              controller: reasonController,
-                              validator: (value) {
-                                if (visitStatus == "did_not_meet_contact" &&
-                                    reasonController.text.trim() == "") {
-                                  return "${AppLocalizations.of(context).translate('please_provide_reason')}";
-                                } else {
-                                  return null;
-                                }
-                              },
-                              minLines: 2,
-                              maxLines: 6,
-                              decoration: InputDecoration(
-                                border: themeData.inputDecorationTheme.border,
-                                enabledBorder:
-                                    themeData.inputDecorationTheme.border,
-                                focusedBorder: themeData
-                                    .inputDecorationTheme.focusedBorder,
-                              ),
-                              textCapitalization: TextCapitalization.sentences,
-                              style: AppTheme.getTextStyle(
-                                themeData.textTheme.bodyText1,
-                                fontWeight: 500,
-                                color: themeData.colorScheme.onBackground,
-                              ),
-                            ),
-                          ),
-                        ],
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "${AppLocalizations.of(context).translate('reason')} : ",
+                      style: AppTheme.getTextStyle(
+                        themeData.textTheme.subtitle1,
+                        fontWeight: 600,
                       ),
                     ),
-                    Row(
-                      children: [
-                        Text(
-                          "${AppLocalizations.of(context).translate('take_photo_of_the_contact_or_visited_place')}",
-                          style: AppTheme.getTextStyle(
-                            themeData.textTheme.bodyText1,
-                            fontWeight: 600,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        OutlinedButton(
-                          onPressed: () async {
-                            await _imgFromCamera();
-                          },
-                          child: Text(
-                            "${AppLocalizations.of(context).translate('choose_file')}",
-                            style: AppTheme.getTextStyle(
-                              themeData.textTheme.bodyText2,
-                              fontWeight: 600,
-                              color: themeData.colorScheme.onBackground,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: Visibility(
-                            visible: _image != null,
-                            child: Padding(
-                              padding: EdgeInsets.all(MySize.size4!),
-                              child: Text(
-                                (_image != null) ? "${_image!.name}" : '',
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ),
-                        )
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        Text(
-                          "${AppLocalizations.of(context).translate('meet_with')} :* ",
-                          style: AppTheme.getTextStyle(
-                            themeData.textTheme.subtitle1,
-                            fontWeight: 600,
-                          ),
-                        )
-                      ],
-                    ),
-                    ListView(
-                      physics: NeverScrollableScrollPhysics(),
-                      shrinkWrap: true,
-                      children: [
-                        Container(
-                          margin: EdgeInsets.symmetric(vertical: MySize.size4!),
-                          height: MySize.size60,
-                          child: TextFormField(
-                            controller: meetWith,
-                            decoration: InputDecoration(
-                              labelText:
-                                  "${AppLocalizations.of(context).translate('name')}",
-                              border: themeData.inputDecorationTheme.border,
-                              enabledBorder:
-                                  themeData.inputDecorationTheme.border,
-                              focusedBorder:
-                                  themeData.inputDecorationTheme.focusedBorder,
-                            ),
-                            validator: (value) {
-                              if (meetWith.text.trim() == "") {
-                                return "${AppLocalizations.of(context).translate('please_provide_meet_with')}";
-                              } else {
-                                return null;
-                              }
-                            },
-                            style: AppTheme.getTextStyle(
-                              themeData.textTheme.bodyText1,
-                              fontWeight: 500,
-                              color: themeData.colorScheme.onBackground,
-                            ),
-                          ),
-                        ),
-                        Container(
-                            margin:
-                                EdgeInsets.symmetric(vertical: MySize.size4!),
-                            height: MySize.size60,
-                            child: TextFormField(
-                              controller: meetMobile,
-                              decoration: InputDecoration(
-                                labelText:
-                                    "${AppLocalizations.of(context).translate('mobile_no')}",
-                                border: themeData.inputDecorationTheme.border,
-                                enabledBorder:
-                                    themeData.inputDecorationTheme.border,
-                                focusedBorder: themeData
-                                    .inputDecorationTheme.focusedBorder,
-                              ),
-                              validator: (value) {
-                                if (meetMobile.text.trim() == "") {
-                                  return "${AppLocalizations.of(context).translate('please_provide_meet_with_mobile_no')}";
-                                } else {
-                                  return null;
-                                }
-                              },
-                              keyboardType: TextInputType.number,
-                              inputFormatters: <TextInputFormatter>[
-                                FilteringTextInputFormatter.digitsOnly
-                              ],
-                              style: AppTheme.getTextStyle(
-                                themeData.textTheme.bodyText1,
-                                fontWeight: 500,
-                                color: themeData.colorScheme.onBackground,
-                              ),
-                            )),
-                        Container(
-                          margin: EdgeInsets.symmetric(vertical: MySize.size4!),
-                          height: MySize.size60,
-                          child: TextFormField(
-                            controller: meetDesignation,
-                            decoration: InputDecoration(
-                              labelText:
-                                  "${AppLocalizations.of(context).translate('designation')}",
-                              border: themeData.inputDecorationTheme.border,
-                              enabledBorder:
-                                  themeData.inputDecorationTheme.border,
-                              focusedBorder:
-                                  themeData.inputDecorationTheme.focusedBorder,
-                            ),
-                            validator: (value) {
-                              if (meetDesignation.text.trim() == "") {
-                                return "${AppLocalizations.of(context).translate('please_provide_designation')}";
-                              } else {
-                                return null;
-                              }
-                            },
-                            textCapitalization: TextCapitalization.sentences,
-                            style: AppTheme.getTextStyle(
-                              themeData.textTheme.bodyText1,
-                              fontWeight: 500,
-                              color: themeData.colorScheme.onBackground,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    ListTile(
-                      leading: Icon(
-                        (showMeet2)
-                            ? MdiIcons.minusCircle
-                            : MdiIcons.plusCircle,
-                        color: themeData.colorScheme.primary,
-                      ),
-                      title: Text(
-                          "${AppLocalizations.of(context).translate('add_meet')} 2"),
-                      onTap: () {
-                        setState(() {
-                          showMeet2 = !showMeet2;
-                        });
-                      },
-                    ),
-                    Visibility(
-                      visible: showMeet2,
-                      child: ListView(
-                        physics: NeverScrollableScrollPhysics(),
-                        shrinkWrap: true,
-                        children: [
-                          Container(
-                            margin:
-                                EdgeInsets.symmetric(vertical: MySize.size4!),
-                            height: MySize.size60,
-                            child: TextFormField(
-                              controller: meetWith2,
-                              decoration: InputDecoration(
-                                labelText:
-                                    "${AppLocalizations.of(context).translate('name')}",
-                                border: themeData.inputDecorationTheme.border,
-                                enabledBorder:
-                                    themeData.inputDecorationTheme.border,
-                                focusedBorder: themeData
-                                    .inputDecorationTheme.focusedBorder,
-                              ),
-                              style: AppTheme.getTextStyle(
-                                themeData.textTheme.bodyText1,
-                                fontWeight: 500,
-                                color: themeData.colorScheme.onBackground,
-                              ),
-                            ),
-                          ),
-                          Container(
-                              margin:
-                                  EdgeInsets.symmetric(vertical: MySize.size4!),
-                              height: MySize.size60,
-                              child: TextFormField(
-                                controller: meetMobile2,
-                                decoration: InputDecoration(
-                                  labelText:
-                                      "${AppLocalizations.of(context).translate('mobile_no')}",
-                                  border: themeData.inputDecorationTheme.border,
-                                  enabledBorder:
-                                      themeData.inputDecorationTheme.border,
-                                  focusedBorder: themeData
-                                      .inputDecorationTheme.focusedBorder,
-                                ),
-                                keyboardType: TextInputType.number,
-                                inputFormatters: <TextInputFormatter>[
-                                  FilteringTextInputFormatter.digitsOnly
-                                ],
-                                style: AppTheme.getTextStyle(
-                                  themeData.textTheme.bodyText1,
-                                  fontWeight: 500,
-                                  color: themeData.colorScheme.onBackground,
-                                ),
-                              )),
-                          Container(
-                            margin:
-                                EdgeInsets.symmetric(vertical: MySize.size4!),
-                            height: MySize.size60,
-                            child: TextFormField(
-                              controller: meetDesignation2,
-                              decoration: InputDecoration(
-                                labelText:
-                                    "${AppLocalizations.of(context).translate('designation')}",
-                                border: themeData.inputDecorationTheme.border,
-                                enabledBorder:
-                                    themeData.inputDecorationTheme.border,
-                                focusedBorder: themeData
-                                    .inputDecorationTheme.focusedBorder,
-                              ),
-                              textCapitalization: TextCapitalization.sentences,
-                              style: AppTheme.getTextStyle(
-                                themeData.textTheme.bodyText1,
-                                fontWeight: 500,
-                                color: themeData.colorScheme.onBackground,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    ListTile(
-                      leading: Icon(
-                        (showMeet3)
-                            ? MdiIcons.minusCircle
-                            : MdiIcons.plusCircle,
-                        color: themeData.colorScheme.primary,
-                      ),
-                      title: Text(
-                          "${AppLocalizations.of(context).translate('add_meet')} 3"),
-                      onTap: () {
-                        setState(() {
-                          showMeet3 = !showMeet3;
-                        });
-                      },
-                    ),
-                    Visibility(
-                      visible: (showMeet3),
-                      child: ListView(
-                        padding: EdgeInsets.symmetric(vertical: MySize.size8!),
-                        physics: NeverScrollableScrollPhysics(),
-                        shrinkWrap: true,
-                        children: [
-                          Container(
-                            margin:
-                                EdgeInsets.symmetric(vertical: MySize.size4!),
-                            height: MySize.size60,
-                            child: TextFormField(
-                              controller: meetWith3,
-                              decoration: InputDecoration(
-                                labelText:
-                                    "${AppLocalizations.of(context).translate('name')}",
-                                border: themeData.inputDecorationTheme.border,
-                                enabledBorder:
-                                    themeData.inputDecorationTheme.border,
-                                focusedBorder: themeData
-                                    .inputDecorationTheme.focusedBorder,
-                              ),
-                              style: AppTheme.getTextStyle(
-                                themeData.textTheme.bodyText1,
-                                fontWeight: 500,
-                                color: themeData.colorScheme.onBackground,
-                              ),
-                            ),
-                          ),
-                          Container(
-                              margin:
-                                  EdgeInsets.symmetric(vertical: MySize.size4!),
-                              height: MySize.size60,
-                              child: TextFormField(
-                                controller: meetMobile3,
-                                decoration: InputDecoration(
-                                  labelText:
-                                      "${AppLocalizations.of(context).translate('mobile_no')}",
-                                  border: themeData.inputDecorationTheme.border,
-                                  enabledBorder:
-                                      themeData.inputDecorationTheme.border,
-                                  focusedBorder: themeData
-                                      .inputDecorationTheme.focusedBorder,
-                                ),
-                                keyboardType: TextInputType.number,
-                                inputFormatters: <TextInputFormatter>[
-                                  FilteringTextInputFormatter.digitsOnly
-                                ],
-                                style: AppTheme.getTextStyle(
-                                  themeData.textTheme.bodyText1,
-                                  fontWeight: 500,
-                                  color: themeData.colorScheme.onBackground,
-                                ),
-                              )),
-                          Container(
-                            margin:
-                                EdgeInsets.symmetric(vertical: MySize.size4!),
-                            height: MySize.size60,
-                            child: TextFormField(
-                              controller: meetDesignation3,
-                              decoration: InputDecoration(
-                                labelText:
-                                    "${AppLocalizations.of(context).translate('designation')}",
-                                border: themeData.inputDecorationTheme.border,
-                                enabledBorder:
-                                    themeData.inputDecorationTheme.border,
-                                focusedBorder: themeData
-                                    .inputDecorationTheme.focusedBorder,
-                              ),
-                              textCapitalization: TextCapitalization.sentences,
-                              style: AppTheme.getTextStyle(
-                                themeData.textTheme.bodyText1,
-                                fontWeight: 500,
-                                color: themeData.colorScheme.onBackground,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        Text(
-                          "${AppLocalizations.of(context).translate('visited_address')} : ",
-                          style: AppTheme.getTextStyle(
-                            themeData.textTheme.subtitle1,
-                            fontWeight: 600,
-                          ),
-                        ),
-                        ElevatedButton.icon(
-                          onPressed: () async {
-                            //get current location
-                            try {
-                              await Geolocator.getCurrentPosition(
-                                      desiredAccuracy: LocationAccuracy.high)
-                                  .then((Position position) {
-                                currentLoc = LatLng(
-                                    position.latitude, position.longitude);
-                                if (currentLoc != null) {
-                                  setState(() {
-                                    location =
-                                        "longitude: ${currentLoc!.longitude.toString()},"
-                                        " latitude: ${currentLoc!.latitude.toString()}";
-                                  });
-                                }
-                              });
-                            } catch (e) {}
-                          },
-                          icon: Icon(MdiIcons.mapMarker),
-                          label: Text(
-                              "${AppLocalizations.of(context).translate('get_current_location')}"),
-                        ),
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '$location',
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        )
-                      ],
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "${AppLocalizations.of(context).translate('discussions_with_the_contact')} : ",
-                          style: AppTheme.getTextStyle(
-                            themeData.textTheme.subtitle1,
-                            fontWeight: 600,
-                          ),
-                        ),
-                        Padding(
-                          padding: EdgeInsets.only(
-                              top: MySize.size4!, bottom: MySize.size10!),
-                          child: TextFormField(
-                            controller: discussionController,
-                            minLines: 2,
-                            maxLines: 6,
-                            decoration: InputDecoration(
-                              border: themeData.inputDecorationTheme.border,
-                              enabledBorder:
-                                  themeData.inputDecorationTheme.border,
-                              focusedBorder:
-                                  themeData.inputDecorationTheme.focusedBorder,
-                            ),
-                            textCapitalization: TextCapitalization.sentences,
-                            style: AppTheme.getTextStyle(
-                              themeData.textTheme.bodyText1,
-                              fontWeight: 500,
-                              color: themeData.colorScheme.onBackground,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    Container(
-                      margin: EdgeInsets.only(top: 16),
-                      child: TextButton(
-                        style: TextButton.styleFrom(
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(4)),
-                          padding:
-                              EdgeInsets.symmetric(vertical: 8, horizontal: 48),
-                          backgroundColor: themeData.colorScheme.primary,
-                        ),
-                        onPressed: () async {
-                          bool validated = true;
-                          String? placeImage;
-                          if (await Helper().checkConnectivity()) {
-                            if (visitStatus == "assigned") {
-                              validated = false;
-                              Fluttertoast.showToast(
-                                  msg: AppLocalizations.of(context)
-                                      .translate('please_enter_visit_status'));
-                            }
-
-                            if (_image == null) {
-                              validated = false;
-                              Fluttertoast.showToast(
-                                  msg: AppLocalizations.of(context).translate(
-                                      'please_upload_image_of_visited_place'));
-                            } else {
-                              File imageFile = new File(_image!.path);
-                              List<int> imageBytes =
-                                  imageFile.readAsBytesSync();
-                              placeImage = base64Encode(imageBytes);
-                            }
-
-                            if (currentLoc == null) {
-                              validated = false;
-                              Fluttertoast.showToast(
-                                  msg: AppLocalizations.of(context).translate(
-                                      'please_add_current_location'));
-                            }
-
-                            if (_formKey.currentState!.validate() &&
-                                validated) {
-                              setState(() {
-                                isLoading = true;
-                              });
-                              Map visitDetails = {
-                                'status': '$visitStatus',
-                                if (visitStatus == "did_not_meet_contact")
-                                  'reason_to_not_meet_contact':
-                                      reasonController.text,
-                                'visited_on': DateFormat('yyyy-MM-dd HH:mm:ss')
-                                    .format(DateTime.now()),
-                                'meet_with': meetWith.text,
-                                'meet_with_mobileno': meetMobile.text,
-                                'meet_with_designation': meetDesignation.text,
-                                'meet_with2': meetWith2.text,
-                                'meet_with_mobileno2': meetMobile2.text,
-                                'meet_with_designation2': meetDesignation2.text,
-                                'meet_with3': meetWith3.text,
-                                'meet_with_mobileno3': meetMobile3.text,
-                                'meet_with_designation3': meetDesignation3.text,
-                                'latitude': currentLoc!.latitude.toString(),
-                                'longitude': currentLoc!.longitude.toString(),
-                                'comments': discussionController.text,
-                                'photo': placeImage
-                              };
-                              FieldForceApi()
-                                  .update(visitDetails, widget.visit['id'])
-                                  .then((value) {
-                                if (value != null) {
-                                  Fluttertoast.showToast(
-                                      msg: AppLocalizations.of(context)
-                                          .translate('status_updated'));
-                                }
-                                Navigator.pop(context);
-                              });
-                            }
+                    Padding(
+                      padding: EdgeInsets.only(
+                          top: MySize.size4!, bottom: MySize.size10!),
+                      child: TextFormField(
+                        controller: reasonController,
+                        validator: (value) {
+                          if (visitStatus == "did_not_meet_contact" &&
+                              reasonController.text.trim() == "") {
+                            return "${AppLocalizations.of(context).translate('please_provide_reason')}";
+                          } else {
+                            return null;
                           }
                         },
-                        child: Text(
-                            AppLocalizations.of(context).translate('update'),
-                            style: AppTheme.getTextStyle(
-                                themeData.textTheme.bodyText1,
-                                color: themeData.colorScheme.onPrimary,
-                                letterSpacing: 0.3)),
+                        minLines: 2,
+                        maxLines: 6,
+                        decoration: InputDecoration(
+                          border: themeData.inputDecorationTheme.border,
+                          enabledBorder:
+                          themeData.inputDecorationTheme.border,
+                          focusedBorder: themeData
+                              .inputDecorationTheme.focusedBorder,
+                        ),
+                        textCapitalization: TextCapitalization.sentences,
+                        style: AppTheme.getTextStyle(
+                          themeData.textTheme.bodyText1,
+                          fontWeight: 500,
+                          color: themeData.colorScheme.onBackground,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
+              // Return Amount Field
+              Padding(
+                padding: EdgeInsets.only(top: MySize.size16!),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "${AppLocalizations.of(context).translate('return_amount')}:",
+                      style: AppTheme.getTextStyle(
+                        themeData.textTheme.subtitle1,
+                        fontWeight: 600,
+                      ),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.only(top: MySize.size4!),
+                      child: TextFormField(
+                        controller: returnAmountController,
+                        decoration: InputDecoration(
+                          suffixText: Helper.getCurrencySymbol(),
+                          border: themeData.inputDecorationTheme.border,
+                          enabledBorder: themeData.inputDecorationTheme.border,
+                          focusedBorder: themeData.inputDecorationTheme.focusedBorder,
+                        ),
+                        keyboardType: TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                        ],
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return AppLocalizations.of(context).translate('please_enter_amount');
+                          }
+                          double amount = double.tryParse(value) ?? 0.0;
+                          if (amount < 0) {
+                            return AppLocalizations.of(context).translate('amount_cannot_be_negative');
+                          }
+                          return null;
+                        },
+                        onChanged: (value) {
+                          double newReturnAmount = Helper.validateReturnAmount(value, widget.visit['max_return_amount'] ?? double.infinity);
+                          if (newReturnAmount.toStringAsFixed(2) != value) {
+                            returnAmountController.text = newReturnAmount.toStringAsFixed(2);
+                            returnAmountController.selection = TextSelection.fromPosition(
+                              TextPosition(offset: returnAmountController.text.length),
+                            );
+                          }
+                          setState(() {
+                            returnAmount = newReturnAmount;
+                          });
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Row(
+                children: [
+                  Text(
+                    "${AppLocalizations.of(context).translate('take_photo_of_the_contact_or_visited_place')}",
+                    style: AppTheme.getTextStyle(
+                      themeData.textTheme.bodyText1,
+                      fontWeight: 600,
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  OutlinedButton(
+                    onPressed: () async {
+                      await _imgFromCamera();
+                    },
+                    child: Text(
+                      "${AppLocalizations.of(context).translate('choose_file')}",
+                      style: AppTheme.getTextStyle(
+                        themeData.textTheme.bodyText2,
+                        fontWeight: 600,
+                        color: themeData.colorScheme.onBackground,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Visibility(
+                      visible: _image != null,
+                      child: Padding(
+                        padding: EdgeInsets.all(MySize.size4!),
+                        child: Text(
+                          (_image != null) ? "${_image!.name}" : '',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  )
+                ],
+              ),
+              Row(
+                children: [
+                  Text(
+                    "${AppLocalizations.of(context).translate('meet_with')} :* ",
+                    style: AppTheme.getTextStyle(
+                      themeData.textTheme.subtitle1,
+                      fontWeight: 600,
+                    ),
+                  )
+                ],
+              ),
+              ListView(
+                physics: NeverScrollableScrollPhysics(),
+                shrinkWrap: true,
+                children: [
+                  Container(
+                    margin: EdgeInsets.symmetric(vertical: MySize.size4!),
+                    height: MySize.size60,
+                    child: TextFormField(
+                      controller: meetWith,
+                      decoration: InputDecoration(
+                        labelText:
+                        "${AppLocalizations.of(context).translate('name')}",
+                        border: themeData.inputDecorationTheme.border,
+                        enabledBorder:
+                        themeData.inputDecorationTheme.border,
+                        focusedBorder:
+                        themeData.inputDecorationTheme.focusedBorder,
+                      ),
+                      validator: (value) {
+                        if (meetWith.text.trim() == "") {
+                          return "${AppLocalizations.of(context).translate('please_provide_meet_with')}";
+                        } else {
+                          return null;
+                        }
+                      },
+                      style: AppTheme.getTextStyle(
+                        themeData.textTheme.bodyText1,
+                        fontWeight: 500,
+                        color: themeData.colorScheme.onBackground,
+                      ),
+                    ),
+                  ),
+                  Container(
+                      margin:
+                      EdgeInsets.symmetric(vertical: MySize.size4!),
+                      height: MySize.size60,
+                      child: TextFormField(
+                        controller: meetMobile,
+                        decoration: InputDecoration(
+                          labelText:
+                          "${AppLocalizations.of(context).translate('mobile_no')}",
+                          border: themeData.inputDecorationTheme.border,
+                          enabledBorder:
+                          themeData.inputDecorationTheme.border,
+                          focusedBorder: themeData
+                              .inputDecorationTheme.focusedBorder,
+                        ),
+                        validator: (value) {
+                          if (meetMobile.text.trim() == "") {
+                            return "${AppLocalizations.of(context).translate('please_provide_meet_with_mobile_no')}";
+                          } else {
+                            return null;
+                          }
+                        },
+                        keyboardType: TextInputType.number,
+                        inputFormatters: <TextInputFormatter>[
+                          FilteringTextInputFormatter.digitsOnly
+                        ],
+                        style: AppTheme.getTextStyle(
+                          themeData.textTheme.bodyText1,
+                          fontWeight: 500,
+                          color: themeData.colorScheme.onBackground,
+                        ),
+                      )),
+                  Container(
+                    margin: EdgeInsets.symmetric(vertical: MySize.size4!),
+                    height: MySize.size60,
+                    child: TextFormField(
+                      controller: meetDesignation,
+                      decoration: InputDecoration(
+                        labelText:
+                        "${AppLocalizations.of(context).translate('designation')}",
+                        border: themeData.inputDecorationTheme.border,
+                        enabledBorder:
+                        themeData.inputDecorationTheme.border,
+                        focusedBorder:
+                        themeData.inputDecorationTheme.focusedBorder,
+                      ),
+                      validator: (value) {
+                        if (meetDesignation.text.trim() == "") {
+                          return "${AppLocalizations.of(context).translate('please_provide_designation')}";
+                        } else {
+                          return null;
+                        }
+                      },
+                      textCapitalization: TextCapitalization.sentences,
+                      style: AppTheme.getTextStyle(
+                        themeData.textTheme.bodyText1,
+                        fontWeight: 500,
+                        color: themeData.colorScheme.onBackground,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              ListTile(
+                leading: Icon(
+                  (showMeet2)
+                      ? MdiIcons.minusCircle
+                      : MdiIcons.plusCircle,
+                  color: themeData.colorScheme.primary,
+                ),
+                title: Text(
+                    "${AppLocalizations.of(context).translate('add_meet')} 2"),
+                onTap: () {
+                  setState(() {
+                    showMeet2 = !showMeet2;
+                  });
+                },
+              ),
+              Visibility(
+                visible: showMeet2,
+                child: ListView(
+                  physics: NeverScrollableScrollPhysics(),
+                  shrinkWrap: true,
+                  children: [
+                    Container(
+                      margin:
+                      EdgeInsets.symmetric(vertical: MySize.size4!),
+                      height: MySize.size60,
+                      child: TextFormField(
+                        controller: meetWith2,
+                        decoration: InputDecoration(
+                          labelText:
+                          "${AppLocalizations.of(context).translate('name')}",
+                          border: themeData.inputDecorationTheme.border,
+                          enabledBorder:
+                          themeData.inputDecorationTheme.border,
+                          focusedBorder: themeData
+                              .inputDecorationTheme.focusedBorder,
+                        ),
+                        style: AppTheme.getTextStyle(
+                          themeData.textTheme.bodyText1,
+                          fontWeight: 500,
+                          color: themeData.colorScheme.onBackground,
+                        ),
+                      ),
+                    ),
+                    Container(
+                        margin:
+                        EdgeInsets.symmetric(vertical: MySize.size4!),
+                        height: MySize.size60,
+                        child: TextFormField(
+                          controller: meetMobile2,
+                          decoration: InputDecoration(
+                            labelText:
+                            "${AppLocalizations.of(context).translate('mobile_no')}",
+                            border: themeData.inputDecorationTheme.border,
+                            enabledBorder:
+                            themeData.inputDecorationTheme.border,
+                            focusedBorder: themeData
+                                .inputDecorationTheme.focusedBorder,
+                          ),
+                          keyboardType: TextInputType.number,
+                          inputFormatters: <TextInputFormatter>[
+                            FilteringTextInputFormatter.digitsOnly
+                          ],
+                          style: AppTheme.getTextStyle(
+                            themeData.textTheme.bodyText1,
+                            fontWeight: 500,
+                            color: themeData.colorScheme.onBackground,
+                          ),
+                        )),
+                    Container(
+                      margin:
+                      EdgeInsets.symmetric(vertical: MySize.size4!),
+                      height: MySize.size60,
+                      child: TextFormField(
+                        controller: meetDesignation2,
+                        decoration: InputDecoration(
+                          labelText:
+                          "${AppLocalizations.of(context).translate('designation')}",
+                          border: themeData.inputDecorationTheme.border,
+                          enabledBorder:
+                          themeData.inputDecorationTheme.border,
+                          focusedBorder: themeData
+                              .inputDecorationTheme.focusedBorder,
+                        ),
+                        textCapitalization: TextCapitalization.sentences,
+                        style: AppTheme.getTextStyle(
+                          themeData.textTheme.bodyText1,
+                          fontWeight: 500,
+                          color: themeData.colorScheme.onBackground,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ListTile(
+                leading: Icon(
+                  (showMeet3)
+                      ? MdiIcons.minusCircle
+                      : MdiIcons.plusCircle,
+                  color: themeData.colorScheme.primary,
+                ),
+                title: Text(
+                    "${AppLocalizations.of(context).translate('add_meet')} 3"),
+                onTap: () {
+                  setState(() {
+                    showMeet3 = !showMeet3;
+                  });
+                },
+              ),
+              Visibility(
+                visible: (showMeet3),
+                child: ListView(
+                  padding: EdgeInsets.symmetric(vertical: MySize.size8!),
+                  physics: NeverScrollableScrollPhysics(),
+                  shrinkWrap: true,
+                  children: [
+                    Container(
+                      margin:
+                      EdgeInsets.symmetric(vertical: MySize.size4!),
+                      height: MySize.size60,
+                      child: TextFormField(
+                        controller: meetWith3,
+                        decoration: InputDecoration(
+                          labelText:
+                          "${AppLocalizations.of(context).translate('name')}",
+                          border: themeData.inputDecorationTheme.border,
+                          enabledBorder:
+                          themeData.inputDecorationTheme.border,
+                          focusedBorder: themeData
+                              .inputDecorationTheme.focusedBorder,
+                        ),
+                        style: AppTheme.getTextStyle(
+                          themeData.textTheme.bodyText1,
+                          fontWeight: 500,
+                          color: themeData.colorScheme.onBackground,
+                        ),
+                      ),
+                    ),
+                    Container(
+                        margin:
+                        EdgeInsets.symmetric(vertical: MySize.size4!),
+                        height: MySize.size60,
+                        child: TextFormField(
+                          controller: meetMobile3,
+                          decoration: InputDecoration(
+                            labelText:
+                            "${AppLocalizations.of(context).translate('mobile_no')}",
+                            border: themeData.inputDecorationTheme.border,
+                            enabledBorder:
+                            themeData.inputDecorationTheme.border,
+                            focusedBorder: themeData
+                                .inputDecorationTheme.focusedBorder,
+                          ),
+                          keyboardType: TextInputType.number,
+                          inputFormatters: <TextInputFormatter>[
+                            FilteringTextInputFormatter.digitsOnly
+                          ],
+                          style: AppTheme.getTextStyle(
+                            themeData.textTheme.bodyText1,
+                            fontWeight: 500,
+                            color: themeData.colorScheme.onBackground,
+                          ),
+                        )),
+                    Container(
+                      margin:
+                      EdgeInsets.symmetric(vertical: MySize.size4!),
+                      height: MySize.size60,
+                      child: TextFormField(
+                        controller: meetDesignation3,
+                        decoration: InputDecoration(
+                          labelText:
+                          "${AppLocalizations.of(context).translate('designation')}",
+                          border: themeData.inputDecorationTheme.border,
+                          enabledBorder:
+                          themeData.inputDecorationTheme.border,
+                          focusedBorder: themeData
+                              .inputDecorationTheme.focusedBorder,
+                        ),
+                        textCapitalization: TextCapitalization.sentences,
+                        style: AppTheme.getTextStyle(
+                          themeData.textTheme.bodyText1,
+                          fontWeight: 500,
+                          color: themeData.colorScheme.onBackground,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Row(
+                children: [
+                  Text(
+                    "${AppLocalizations.of(context).translate('visited_address')} : ",
+                    style: AppTheme.getTextStyle(
+                      themeData.textTheme.subtitle1,
+                      fontWeight: 600,
+                    ),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () async {
+                      try {
+                        await Geolocator.getCurrentPosition(
+                            desiredAccuracy: LocationAccuracy.high)
+                            .then((Position position) {
+                          currentLoc = LatLng(
+                              position.latitude, position.longitude);
+                          if (currentLoc != null) {
+                            setState(() {
+                              location =
+                              "longitude: ${currentLoc!.longitude.toString()},"
+                                  " latitude: ${currentLoc!.latitude.toString()}";
+                            });
+                          }
+                        });
+                      } catch (e) {}
+                    },
+                    icon: Icon(MdiIcons.mapMarker),
+                    label: Text(
+                        "${AppLocalizations.of(context).translate('get_current_location')}"),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '$location',
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  )
+                ],
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "${AppLocalizations.of(context).translate('discussions_with_the_contact')} : ",
+                    style: AppTheme.getTextStyle(
+                      themeData.textTheme.subtitle1,
+                      fontWeight: 600,
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.only(
+                        top: MySize.size4!, bottom: MySize.size10!),
+                    child: TextFormField(
+                      controller: discussionController,
+                      minLines: 2,
+                      maxLines: 6,
+                      decoration: InputDecoration(
+                        border: themeData.inputDecorationTheme.border,
+                        enabledBorder:
+                        themeData.inputDecorationTheme.border,
+                        focusedBorder:
+                        themeData.inputDecorationTheme.focusedBorder,
+                      ),
+                      textCapitalization: TextCapitalization.sentences,
+                      style: AppTheme.getTextStyle(
+                        themeData.textTheme.bodyText1,
+                        fontWeight: 500,
+                        color: themeData.colorScheme.onBackground,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                margin: EdgeInsets.only(top: 16),
+                child: TextButton(
+                  style: TextButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4)),
+                    padding:
+                    EdgeInsets.symmetric(vertical: 8, horizontal: 48),
+                    backgroundColor: themeData.colorScheme.primary,
+                  ),
+                  onPressed: () async {
+                    bool validated = true;
+                    String? placeImage;
+
+                    // Validate return amount
+                    if (returnAmount > (widget.visit['max_return_amount'] ?? double.infinity)) {
+                      Fluttertoast.showToast(
+                        msg: AppLocalizations.of(context).translate('return_amount_exceeds_max'),
+                      );
+                      validated = false;
+                    }
+
+                    if (await Helper().checkConnectivity()) {
+                      if (visitStatus == "assigned") {
+                        validated = false;
+                        Fluttertoast.showToast(
+                            msg: AppLocalizations.of(context)
+                                .translate('please_enter_visit_status'));
+                      }
+
+                      if (_image == null) {
+                        validated = false;
+                        Fluttertoast.showToast(
+                            msg: AppLocalizations.of(context).translate(
+                                'please_upload_image_of_visited_place'));
+                      } else {
+                        File imageFile = File(_image!.path);
+                        List<int> imageBytes = imageFile.readAsBytesSync();
+                        placeImage = base64Encode(imageBytes);
+                      }
+
+                      if (currentLoc == null) {
+                        validated = false;
+                        Fluttertoast.showToast(
+                            msg: AppLocalizations.of(context).translate(
+                                'please_add_current_location'));
+                      }
+
+                      if (_formKey.currentState!.validate() && validated) {
+                        setState(() {
+                          isLoading = true;
+                        });
+                        Map visitDetails = {
+                          'status': '$visitStatus',
+                          'return_amount': returnAmount,
+                          if (visitStatus == "did_not_meet_contact")
+                            'reason_to_not_meet_contact':
+                            reasonController.text,
+                          'visited_on': DateFormat('yyyy-MM-dd HH:mm:ss')
+                              .format(DateTime.now()),
+                          'meet_with': meetWith.text,
+                          'meet_with_mobileno': meetMobile.text,
+                          'meet_with_designation': meetDesignation.text,
+                          'meet_with2': meetWith2.text,
+                          'meet_with_mobileno2': meetMobile2.text,
+                          'meet_with_designation2': meetDesignation2.text,
+                          'meet_with3': meetWith3.text,
+                          'meet_with_mobileno3': meetMobile3.text,
+                          'meet_with_designation3': meetDesignation3.text,
+                          'latitude': currentLoc!.latitude.toString(),
+                          'longitude': currentLoc!.longitude.toString(),
+                          'comments': discussionController.text,
+                          'photo': placeImage
+                        };
+                        FieldForceApi()
+                            .update(visitDetails, widget.visit['id'])
+                            .then((value) {
+                          if (value != null) {
+                            Fluttertoast.showToast(
+                                msg: AppLocalizations.of(context)
+                                    .translate('status_updated'));
+                          }
+                          Navigator.pop(context);
+                        });
+                      }
+                    }
+                  },
+                  child: Text(
+                      AppLocalizations.of(context).translate('update'),
+                      style: AppTheme.getTextStyle(
+                          themeData.textTheme.bodyText1,
+                          color: themeData.colorScheme.onPrimary,
+                          letterSpacing: 0.3)),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  //image from camera
   _imgFromCamera() async {
-    XFile? image = await _picker.pickImage(
-        source: ImageSource.camera); //, imageQuality: 50);
+    XFile? image = await _picker.pickImage(source: ImageSource.camera);
     setState(() {
       _image = image;
     });
@@ -835,13 +895,13 @@ class _FollowUpFormState extends State<FollowUpForm> {
                         },
                         decoration: InputDecoration(
                           labelText:
-                              "${AppLocalizations.of(context).translate('title')}:",
+                          "${AppLocalizations.of(context).translate('title')}:",
                           hintText:
-                              "${AppLocalizations.of(context).translate('title')}",
+                          "${AppLocalizations.of(context).translate('title')}",
                           border: themeData.inputDecorationTheme.border,
                           enabledBorder: themeData.inputDecorationTheme.border,
                           focusedBorder:
-                              themeData.inputDecorationTheme.focusedBorder,
+                          themeData.inputDecorationTheme.focusedBorder,
                         ),
                         controller: titleController,
                         textCapitalization: TextCapitalization.sentences,
@@ -876,14 +936,14 @@ class _FollowUpFormState extends State<FollowUpForm> {
                                   items: statusList
                                       .map<DropdownMenuItem<String>>(
                                           (String value) {
-                                    return DropdownMenuItem<String>(
-                                        value: value,
-                                        child: Text(value,
-                                            style: AppTheme.getTextStyle(
-                                                themeData.textTheme.bodyText1,
-                                                color: themeData.colorScheme
-                                                    .onBackground)));
-                                  }).toList(),
+                                        return DropdownMenuItem<String>(
+                                            value: value,
+                                            child: Text(value,
+                                                style: AppTheme.getTextStyle(
+                                                    themeData.textTheme.bodyText1,
+                                                    color: themeData.colorScheme
+                                                        .onBackground)));
+                                      }).toList(),
                                   onChanged: (newValue) {
                                     setState(() {
                                       selectedStatus = newValue.toString();
@@ -932,20 +992,20 @@ class _FollowUpFormState extends State<FollowUpForm> {
                                   items: followUpTypeList
                                       .map<DropdownMenuItem<String>>(
                                           (String value) {
-                                    return DropdownMenuItem<String>(
-                                        value: value,
-                                        child: Text(value,
-                                            style: AppTheme.getTextStyle(
-                                                themeData.textTheme.bodyText1,
-                                                color: themeData.colorScheme
-                                                    .onBackground)));
-                                  }).toList(),
+                                        return DropdownMenuItem<String>(
+                                            value: value,
+                                            child: Text(value,
+                                                style: AppTheme.getTextStyle(
+                                                    themeData.textTheme.bodyText1,
+                                                    color: themeData.colorScheme
+                                                        .onBackground)));
+                                      }).toList(),
                                   onChanged: (newValue) {
                                     setState(() {
                                       selectedFollowUpType =
                                           newValue.toString();
                                       if ((newValue.toString().toLowerCase() ==
-                                              'call' &&
+                                          'call' &&
                                           selectedStatus == 'completed')) {
                                         // getCallLogDetails();
                                       } else {
@@ -984,10 +1044,9 @@ class _FollowUpFormState extends State<FollowUpForm> {
                             ),
                           ),
                           SizedBox(
-                            // width: MySize.screenWidth! * 0.8,
                             child: DropdownButtonFormField(
                               value: (followUpCategory
-                                      .contains(selectedFollowUpCategory))
+                                  .contains(selectedFollowUpCategory))
                                   ? selectedFollowUpCategory
                                   : followUpCategory[0],
                               hint: Text(
@@ -1006,14 +1065,14 @@ class _FollowUpFormState extends State<FollowUpForm> {
                               items: followUpCategory
                                   .map<DropdownMenuItem<Map<String, dynamic>>>(
                                       (Map<String, dynamic> value) {
-                                return DropdownMenuItem<Map<String, dynamic>>(
-                                    value: value,
-                                    child: Text(value['name'],
-                                        style: AppTheme.getTextStyle(
-                                            themeData.textTheme.bodyText1,
-                                            color: themeData
-                                                .colorScheme.onBackground)));
-                              }).toList(),
+                                    return DropdownMenuItem<Map<String, dynamic>>(
+                                        value: value,
+                                        child: Text(value['name'],
+                                            style: AppTheme.getTextStyle(
+                                                themeData.textTheme.bodyText1,
+                                                color: themeData
+                                                    .colorScheme.onBackground)));
+                                  }).toList(),
                               onChanged: (Map<String, dynamic>? newValue) {
                                 setState(() {
                                   selectedFollowUpCategory = newValue!;
@@ -1040,7 +1099,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                         lastDate: DateTime.now().add(Duration(days: 180)),
                         dateMask: 'yyyy-MM-dd    hh:mm a',
                         dateLabelText:
-                            "${AppLocalizations.of(context).translate('start_datetime')}:",
+                        "${AppLocalizations.of(context).translate('start_datetime')}:",
                         style: AppTheme.getTextStyle(
                           themeData.textTheme.bodyText1,
                           fontWeight: 500,
@@ -1069,7 +1128,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                         lastDate: DateTime.now().add(Duration(days: 180)),
                         dateMask: 'yyyy-MM-dd    hh:mm a',
                         dateLabelText:
-                            "${AppLocalizations.of(context).translate('end_datetime')}:",
+                        "${AppLocalizations.of(context).translate('end_datetime')}:",
                         style: AppTheme.getTextStyle(
                           themeData.textTheme.bodyText1,
                           fontWeight: 500,
@@ -1097,13 +1156,13 @@ class _FollowUpFormState extends State<FollowUpForm> {
                         decoration: InputDecoration(
                           alignLabelWithHint: true,
                           labelText:
-                              "${AppLocalizations.of(context).translate('description')}:",
+                          "${AppLocalizations.of(context).translate('description')}:",
                           hintText:
-                              "${AppLocalizations.of(context).translate('description')}",
+                          "${AppLocalizations.of(context).translate('description')}",
                           border: themeData.inputDecorationTheme.border,
                           enabledBorder: themeData.inputDecorationTheme.border,
                           focusedBorder:
-                              themeData.inputDecorationTheme.focusedBorder,
+                          themeData.inputDecorationTheme.focusedBorder,
                         ),
                         controller: descriptionController,
                         textCapitalization: TextCapitalization.sentences,
@@ -1156,13 +1215,9 @@ class _FollowUpFormState extends State<FollowUpForm> {
                             ),
                           ),
                           onPressed: () async {
-                            //form validation
                             if (selectedFollowUpType == 'call' &&
                                 selectedStatus == 'completed') {
                               onSubmit();
-                              // getCallLogDetails().then((value) async {
-                              //   onSubmit();
-                              // });
                             } else {
                               onSubmit();
                             }
@@ -1178,40 +1233,6 @@ class _FollowUpFormState extends State<FollowUpForm> {
     );
   }
 
-  //get call logs from mobile
-//   getCallLogDetails() async {
-//     List<CallLogEntry> logs = [
-//       await FollowUpModel().getLogs(widget.customerDetails['mobile']),
-//       await FollowUpModel().getLogs(widget.customerDetails['landline']),
-//       await FollowUpModel().getLogs(widget.customerDetails['alternate_number'])
-//     ];
-// //sort callLogs with respective of highest timestamp(last dialed number)
-//     logs.sort((a, b) =>
-//         ((a != null) ? a.timestamp : 0)
-//             .compareTo((b != null) ? b.timestamp : 0));
-//     CallLogEntry lastLog = logs.last;
-//
-//     if (lastLog != null) {
-//       // get last call duration of selected customer
-//       setState(() {
-//         startDateController.text =
-//             DateTime.fromMillisecondsSinceEpoch(lastLog.timestamp)
-//                 .subtract(Duration(seconds: lastLog.duration))
-//                 .toString();
-//         endDateController.text =
-//             DateTime.fromMillisecondsSinceEpoch(lastLog.timestamp).toString();
-//         showError = false;
-//       });
-//       duration =
-//       '${Duration(seconds: lastLog.duration).toString().substring(2, 7)}';
-//     } else {
-//       setState(() {
-//         showError = true;
-//       });
-//     }
-//   }
-
-  //on submit
   onSubmit() async {
     if (_formKey.currentState!.validate() && showError == false) {
       Map followUp = FollowUpModel().submitFollowUp(
@@ -1226,7 +1247,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
           status: selectedStatus);
       int response = (widget.edit == true)
           ? await FollowUpApi()
-              .update(followUp, widget.customerDetails['followUpId'])
+          .update(followUp, widget.customerDetails['followUpId'])
           : await FollowUpApi().addFollowUp(followUp);
       if (response == 201 || response == 200) {
         Navigator.pop(context);
@@ -1236,7 +1257,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
       } else {
         Fluttertoast.showToast(
             msg:
-                "${AppLocalizations.of(context).translate('something_went_wrong')}");
+            "${AppLocalizations.of(context).translate('something_went_wrong')}");
       }
     }
   }

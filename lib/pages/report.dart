@@ -27,27 +27,7 @@ class ReportScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            TextButton(
-                style: TextButton.styleFrom(
-                  minimumSize:
-                      Size(MediaQuery.of(context).size.width * 0.7, 50),
-                  foregroundColor: Colors.white,
-                  backgroundColor: themeData.primaryColor,
-                  disabledForegroundColor: Colors.grey.withOpacity(0.38),
-                  shadowColor: Colors.red,
-                  elevation: 1,
-                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                  shape: const BeveledRectangleBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(15))),
-                ),
-                onPressed: () {
-                  Navigator.pushNamed(
-                      context, ProfitLossReportScreen.routeName);
-                },
-                child: Text(
-                  AppLocalizations.of(context).translate('profit_and_loss'),
-                  style: TextStyle(color: Colors.white),
-                )),
+
             SizedBox(
               height: 20,
             ),

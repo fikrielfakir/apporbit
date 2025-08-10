@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../locale/MyLocalizations.dart';
-
 class Statistics extends StatelessWidget {
   const Statistics({
     Key? key,
@@ -18,27 +16,6 @@ class Statistics extends StatelessWidget {
   final double totalSalesAmount, totalReceivedAmount, totalDueAmount;
   final ThemeData themeData;
 
-  static const List<Color> blocksColor = [
-    Color(0xff009dff),
-    Color(0xffff9400),
-    Color(0xff62ad00),
-    Color(0xff9b0819)
-  ];
-
-  static const List<String> blocksName = [
-    'number_of_sales',
-    'sales_amount',
-    'paid_amount',
-    'due_amount'
-  ];
-
-  static const List<String> blocksImagesPath = [
-    'assets/images/sales.png',
-    'assets/images/total_sales.png',
-    'assets/images/payed_money.png',
-    'assets/images/recived_money.png'
-  ];
-
   @override
   Widget build(BuildContext context) {
     // Get screen dimensions for responsive sizing
@@ -52,48 +29,77 @@ class Statistics extends StatelessWidget {
           final crossAxisCount = isTablet ? 4 : 2;
           final childAspectRatio = isTablet ? 3 / 2 : 4 / 3;
 
-          return GridView.builder(
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: crossAxisCount,
-              mainAxisSpacing: blockPadding,
-              childAspectRatio: childAspectRatio,
-              crossAxisSpacing: blockPadding,
-            ),
-            shrinkWrap: true,
-            physics: const ClampingScrollPhysics(),
-            itemCount: 4,
-            padding: EdgeInsets.all(blockPadding),
-            itemBuilder: (context, index) {
-              // Format the amounts in a cleaner way
-              String formattedAmount = '';
-              if (index == 0) {
-                formattedAmount = formatQuantity(totalSales ?? 0);
-              } else if (index == 1) {
-                formattedAmount = '$businessSymbol ${formatCurrency(totalSalesAmount)}';
-              } else if (index == 2) {
-                formattedAmount = '$businessSymbol ${formatCurrency(totalReceivedAmount)}';
-              } else {
-                formattedAmount = '$businessSymbol ${formatCurrency(totalDueAmount)}';
-              }
+          return Container(
+            margin: EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                GridView.builder(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    mainAxisSpacing: blockPadding,
+                    childAspectRatio: childAspectRatio,
+                    crossAxisSpacing: blockPadding,
+                  ),
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: 4,
+                  padding: EdgeInsets.all(blockPadding),
+                  itemBuilder: (context, index) {
+                    // Data and styling for each stat card
+                    final List<Color> colors = [
+                      Color(0xFF4C6FFF), // Blue
+                      Color(0xFFFF8A48), // Orange
+                      Color(0xFF41D37E), // Green
+                      Color(0xFFFF5C5C), // Red
+                    ];
 
-              return AnimatedStatBlock(
-                themeData: themeData,
-                blockColor: blocksColor[index],
-                index: index,
-                image: blocksImagesPath[index],
-                subject: AppLocalizations.of(context).translate(blocksName[index]),
-                amount: formattedAmount,
-                delay: index * 0.2, // Staggered delay
-              );
-            },
+                    final List<String> icons = [
+                      'assets/images/sales.png',
+                      'assets/images/total_sales.png',
+                      'assets/images/payed_money.png',
+                      'assets/images/recived_money.png'
+                    ];
+
+                    final List<String> titles = [
+                      'Number of Sales',
+                      'Sales Amount',
+                      'Paid Amount',
+                      'Due Amount'
+                    ];
+
+                    // Format the amounts in a cleaner way
+                    String formattedAmount = '';
+                    if (index == 0) {
+                      formattedAmount = formatQuantity(totalSales ?? 0);
+                    } else if (index == 1) {
+                      formattedAmount = '$businessSymbol ${formatCurrency(totalSalesAmount)}';
+                    } else if (index == 2) {
+                      formattedAmount = '$businessSymbol ${formatCurrency(totalReceivedAmount)}';
+                    } else {
+                      formattedAmount = '$businessSymbol ${formatCurrency(totalDueAmount)}';
+                    }
+
+                    return AnimatedStatBlock(
+                      themeData: themeData,
+                      blockColor: colors[index],
+                      index: index,
+                      image: icons[index],
+                      subject: titles[index],
+                      amount: formattedAmount,
+                      delay: index * 0.2, // Staggered delay
+                    );
+                  },
+                ),
+              ],
+            ),
           );
         }
     );
   }
 
-  // Helper methods moved inside the class
+  // Helper methods
   String formatQuantity(int value) {
-    // Format number with commas for thousands
     return value.toString().replaceAllMapped(
         RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
             (Match m) => '${m[1]},'
@@ -101,7 +107,6 @@ class Statistics extends StatelessWidget {
   }
 
   String formatCurrency(double value) {
-    // Format currency with 2 decimal places
     return value.toStringAsFixed(2).replaceAllMapped(
         RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
             (Match m) => '${m[1]},'
@@ -136,13 +141,14 @@ class _AnimatedStatBlockState extends State<AnimatedStatBlock>
   late AnimationController _controller;
   late Animation<Offset> _slideAnimation;
   late Animation<double> _fadeAnimation;
+  late Animation<double> _scaleAnimation;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 600),
     );
 
     // Delay each animation based on index
@@ -150,11 +156,9 @@ class _AnimatedStatBlockState extends State<AnimatedStatBlock>
       if (mounted) _controller.forward();
     });
 
-    // Decide the direction based on the index
-    final direction = widget.index.isEven ? 1.0 : -1.0;
-
+    // Create animations
     _slideAnimation = Tween<Offset>(
-      begin: Offset(direction, 0.0),
+      begin: Offset(0.0, 0.3),
       end: Offset.zero,
     ).animate(
       CurvedAnimation(
@@ -169,7 +173,17 @@ class _AnimatedStatBlockState extends State<AnimatedStatBlock>
     ).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: const Interval(0.3, 1.0, curve: Curves.easeOut),
+        curve: const Interval(0.2, 1.0, curve: Curves.easeOut),
+      ),
+    );
+
+    _scaleAnimation = Tween<double>(
+      begin: 0.95,
+      end: 1.0,
+    ).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeOutCubic,
       ),
     );
   }
@@ -186,12 +200,15 @@ class _AnimatedStatBlockState extends State<AnimatedStatBlock>
       position: _slideAnimation,
       child: FadeTransition(
         opacity: _fadeAnimation,
-        child: StatBlock(
-          themeData: widget.themeData,
-          amount: widget.amount,
-          subject: widget.subject,
-          backgroundColor: widget.blockColor,
-          image: widget.image,
+        child: ScaleTransition(
+          scale: _scaleAnimation,
+          child: StatBlock(
+            themeData: widget.themeData,
+            amount: widget.amount,
+            subject: widget.subject,
+            backgroundColor: widget.blockColor,
+            image: widget.image,
+          ),
         ),
       ),
     );
@@ -219,7 +236,7 @@ class StatBlock extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: backgroundColor.withOpacity(0.3),
+            color: backgroundColor.withOpacity(0.2),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),
@@ -229,7 +246,7 @@ class StatBlock extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: [
             backgroundColor,
-            backgroundColor.withOpacity(0.8),
+            Color.lerp(backgroundColor, Colors.white, 0.2) ?? backgroundColor,
           ],
         ),
       ),
@@ -249,30 +266,25 @@ class StatBlock extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center, // Centers the children
-                    children: [
-                      Image.asset(
-                        image,
-                        height: 42,
-                        width: 42,
-                        color: Colors.white.withOpacity(0.9),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
+                  Image.asset(
+                    image,
+                    height: 36,
+                    width: 36,
+                    color: Colors.white.withOpacity(0.95),
                   ),
                   const Spacer(),
                   Text(
                     subject,
-                    style: themeData.textTheme.bodyLarge?.copyWith(
+                    style: themeData.textTheme.bodyMedium?.copyWith(
                       color: Colors.white.withOpacity(0.9),
                       fontWeight: FontWeight.w500,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
+                  const SizedBox(height: 4),
                   Text(
                     amount,
-                    style: themeData.textTheme.bodyLarge?.copyWith(
+                    style: themeData.textTheme.titleMedium?.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
                     ),

@@ -116,86 +116,143 @@ class _SalesState extends State<Sales> {
       });
     });
   }
+
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 3, // Increase the length to 3
-      initialIndex: 0,
-      child: Scaffold(
-        appBar: AppBar(
-          elevation: 0,
-          title: Text(AppLocalizations.of(context).translate('sales'),
-              style: AppTheme.getTextStyle(themeData.textTheme.headline6,
-                  fontWeight: 600)),
-          actions: <Widget>[
+    bool hasUnsyncedInvoices = sellList.any((sell) => sell['is_synced'] == 0);
 
-            TextButton(
-              onPressed: () async {
-                if (await Helper().checkConnectivity()) {
-                  showDialog(
-                    barrierDismissible: true,
-                    context: context,
-                    builder: (BuildContext context) {
-                      return AlertDialog(
-                        content: Row(
-                          children: [
-                            CircularProgressIndicator(),
-                            Container(
-                                margin: EdgeInsets.only(left: 5),
-                                child: Text(AppLocalizations.of(context)
-                                    .translate('sync_in_progress'))),
-                          ],
-                        ),
+    return DefaultTabController(
+      length: 3,
+      child: Scaffold(
+        body: Column(
+          children: [
+            // Sync notification banner at the top
+            if (hasUnsyncedInvoices)
+              AnimatedSwitcher(
+                duration: Duration(milliseconds: 300),
+                child: SyncNotification(
+                  key: ValueKey('sync-notification'),
+                  message: AppLocalizations.of(context).translate('invoice_not_synced'),
+                  onRetry: () async {
+                    if (await Helper().checkConnectivity()) {
+                      showDialog(
+                        barrierDismissible: true,
+                        context: context,
+                        builder: (BuildContext context) {
+                          return AlertDialog(
+                            content: Row(
+                              children: [
+                                CircularProgressIndicator(),
+                                Container(
+                                  margin: EdgeInsets.only(left: 5),
+                                  child: Text(
+                                      AppLocalizations.of(context).translate('sync_in_progress')
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       );
-                    },
-                  );
-                  await Sell().createApiSell(syncAll: true).then((value) {
-                    Navigator.pop(context);
-                    setState(() {
-                      synced = true;
-                      sells();
-                    });
-                  });
-                } else
-                  Fluttertoast.showToast(
-                      msg: AppLocalizations.of(context)
-                          .translate('check_connectivity'));
-              },
-              child: Text(
-                AppLocalizations.of(context).translate('sync'),
-                style: AppTheme.getTextStyle(themeData.textTheme.subtitle1,
-                    fontWeight: (synced) ? 500 : 900, letterSpacing: -0.2),
+                      await Sell().createApiSell(syncAll: true).then((value) {
+                        Navigator.pop(context);
+                        setState(() {
+                          synced = true;
+                          sells();
+                        });
+                      });
+                    } else {
+                      Fluttertoast.showToast(
+                          msg: AppLocalizations.of(context).translate('check_connectivity')
+                      );
+                    }
+                  },
+                ),
+              ),
+            // Main content area
+            Expanded(
+              child: DefaultTabController(
+                length: 3,
+                initialIndex: 0,
+                child: Scaffold(
+                  appBar: AppBar(
+                    elevation: 0,
+                    title: Text(AppLocalizations.of(context).translate('sales'),
+                        style: AppTheme.getTextStyle(themeData.textTheme.headline6,
+                            fontWeight: 600)),
+                    actions: <Widget>[
+                      TextButton(
+                        onPressed: () async {
+                          if (await Helper().checkConnectivity()) {
+                            showDialog(
+                              barrierDismissible: true,
+                              context: context,
+                              builder: (BuildContext context) {
+                                return AlertDialog(
+                                  content: Row(
+                                    children: [
+                                      CircularProgressIndicator(),
+                                      Container(
+                                          margin: EdgeInsets.only(left: 5),
+                                          child: Text(AppLocalizations.of(context)
+                                              .translate('sync_in_progress'))),
+                                    ],
+                                  ),
+                                );
+                              },
+                            );
+                            await Sell().createApiSell(syncAll: true).then((value) {
+                              Navigator.pop(context);
+                              setState(() {
+                                synced = true;
+                                sells();
+                              });
+                            });
+                          } else
+                            Fluttertoast.showToast(
+                                msg: AppLocalizations.of(context)
+                                    .translate('check_connectivity'));
+                        },
+                        child: Text(
+                          AppLocalizations.of(context).translate('sync'),
+                          style: AppTheme.getTextStyle(themeData.textTheme.subtitle1,
+                              fontWeight: (synced) ? 500 : 900, letterSpacing: -0.2),
+                        ),
+                      ),
+                    ],
+                    bottom: TabBar(
+                      tabs: [
+                        Tab(
+                          icon: Icon(Icons.line_weight),
+                          child: Text(
+                            AppLocalizations.of(context).translate('recent'),
+                          ),
+                        ),
+                        Tab(
+                          icon: Icon(Icons.line_style),
+                          child: Text(
+                            AppLocalizations.of(context).translate('sales'),
+                          ),
+                        ),
+                        Tab(
+                          icon: Icon(Icons.assignment_return),
+                          child: Text(
+                            AppLocalizations.of(context).translate('sell_returns'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  body: TabBarView(
+                    children: [
+                      currentSales(),
+                      allSales(),
+                      SellReturnListScreen(),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ],
-          bottom: TabBar(
-            tabs: [
-              Tab(
-                icon: Icon(Icons.line_weight),
-                child: Text(
-                  AppLocalizations.of(context).translate('recent'),
-                ),
-              ),
-              Tab(
-                icon: Icon(Icons.line_style),
-                child: Text(
-                  AppLocalizations.of(context).translate('sales'),
-                ),
-              ),
-              Tab(
-                icon: Icon(Icons.assignment_return),
-                child: Text(
-                  AppLocalizations.of(context).translate('sell_returns'),
-                ),
-              ),
-            ],
-          ),
-        ),
-        body: TabBarView(
-          children: [
-            currentSales(),
-            allSales(),
-            SellReturnListScreen(), // Add the SellReturnListScreen here
           ],
         ),
       ),
@@ -264,7 +321,7 @@ class _SalesState extends State<Sales> {
                 Container(
                   margin: EdgeInsets.only(left: 5),
                   child:
-                      Text(AppLocalizations.of(context).translate('loading')),
+                  Text(AppLocalizations.of(context).translate('loading')),
                 ),
               ],
             ),
@@ -290,9 +347,9 @@ class _SalesState extends State<Sales> {
       value.forEach((element) async {
         if (element['is_synced'] == 0) synced = false;
         var customerDetail =
-            await Contact().getCustomerDetailById(element['contact_id']);
+        await Contact().getCustomerDetailById(element['contact_id']);
         var locationName =
-            await Helper().getLocationNameById(element['location_id']);
+        await Helper().getLocationNameById(element['location_id']);
         setState(() {
           sellList.add({
             'id': element['id'],
@@ -379,6 +436,16 @@ class _SalesState extends State<Sales> {
       });
     }
   }
+  String normalizeNumber(String amount) {
+    // Remove all commas and extra decimal places
+    String normalized = amount.replaceAll(',', '');
+
+    // Parse to double to handle decimal places consistently
+    double parsed = double.tryParse(normalized) ?? 0.0;
+
+    // Format to 2 decimal places without commas
+    return parsed.toStringAsFixed(2);
+  }
 
   //update sells
   updateSells(sells) async {
@@ -399,7 +466,7 @@ class _SalesState extends State<Sales> {
       pendingAmount = double.parse(sells['final_total']) - totalAmount;
     }
     Map<String, dynamic> sellMap =
-        Sell().createSellMap(sells, changeReturn, pendingAmount);
+    Sell().createSellMap(sells, changeReturn, pendingAmount);
     await SellDatabase().updateSells(sell[0]['id'], sellMap);
   }
 
@@ -450,8 +517,8 @@ class _SalesState extends State<Sales> {
       List payments = sell['payment_lines'];
       double totalPaid = 0.00;
       Map<String, dynamic>? customer =
-          //sell['contact'];
-          await Contact().getCustomerDetailById(sell['contact_id']);
+      //sell['contact'];
+      await Contact().getCustomerDetailById(sell['contact_id']);
       var location = await Helper().getLocationNameById(sell['location_id']);
       payments.forEach((element) {
         totalPaid += double.parse(element['amount']);
@@ -459,22 +526,23 @@ class _SalesState extends State<Sales> {
       (totalPaid <= double.parse(sell['final_total']))
           ? paidAmount = Helper().formatCurrency(totalPaid)
           : paidAmount = Helper().formatCurrency(sell['final_total']);
+      // In setAllSalesList() method, modify the invoice_amount handling:
       allSalesListMap.add({
         'id': sell['id'],
         'location_name': location,
-        'contact_name': (customer != null)
-            ? ("${(customer['name'] != null) ? customer['name'] : ''} "
-                "${(customer['supplier_business_name'] != null) ? customer['supplier_business_name'] : ''}")
-            : null,
-        'mobile': (customer != null) ? customer['mobile'] : null,
+        'contact_name': customer != null ? customer['name'] : '',
+        'mobile': customer != null ? customer['mobile'] : null,
         'invoice_no': sell['invoice_no'],
         'invoice_url': sell['invoice_url'],
         'date_time': sell['transaction_date'],
-        'invoice_amount': sell['final_total'],
+        'invoice_amount': sell['final_total'] != null
+            ? double.parse(sell['final_total'].toString()).toStringAsFixed(2)
+            : '0.00', // Ensure proper formatting
         'status': sell['payment_status'] ?? sell['status'],
         'paid_amount': paidAmount,
         'is_quotation': sell['is_quotation'].toString()
       });
+
       if (this.mounted) {
         setState(() {
           isLoading = true;
@@ -523,26 +591,26 @@ class _SalesState extends State<Sales> {
     return (sellList.length > 0)
         ? ListView.builder(
         padding: EdgeInsets.all(10),
-            controller: _scrollController,
-            shrinkWrap: true,
-            itemCount: sellList.length,
-            itemBuilder: (context, index) {
-              return recentSellItem(
-                  price: Helper()
-                      .formatCurrency(sellList[index]['invoice_amount']),
-                  number: sellList[index]['invoice_no'],
-                  status: checkStatus(sellList[index]['invoice_amount'],
-                      sellList[index]['pending_amount']),
-                  time: sellList[index]['transaction_date'],
-                  paid: Helper().formatCurrency(sellList[index]
-                          ['invoice_amount'] -
-                      sellList[index]['pending_amount']),
-                  isSynced: sellList[index]['is_synced'],
-                  customerName: sellList[index]['customer_name'],
-                  locationName: sellList[index]['location_name'],
-                  isQuotation: sellList[index]['is_quotation'],
-                  index: index);
-            })
+        controller: _scrollController,
+        shrinkWrap: true,
+        itemCount: sellList.length,
+        itemBuilder: (context, index) {
+          return recentSellItem(
+              price: Helper()
+                  .formatCurrency(sellList[index]['invoice_amount']),
+              number: sellList[index]['invoice_no'],
+              status: checkStatus(sellList[index]['invoice_amount'],
+                  sellList[index]['pending_amount']),
+              time: sellList[index]['transaction_date'],
+              paid: Helper().formatCurrency(sellList[index]
+              ['invoice_amount'] -
+                  sellList[index]['pending_amount']),
+              isSynced: sellList[index]['is_synced'],
+              customerName: sellList[index]['customer_name'],
+              locationName: sellList[index]['location_name'],
+              isQuotation: sellList[index]['is_quotation'],
+              index: index);
+        })
         : Helper().noDataWidget(context);
   }
 
@@ -550,243 +618,243 @@ class _SalesState extends State<Sales> {
   Widget allSales() {
     return (canViewSell)
         ? Column(
-            children: [
-              GestureDetector(
-                onTap: () {
-                  setState(() {
-                    showFilter = !showFilter;
-                  });
-                },
-                child: Container(
-                  padding: EdgeInsets.all(MySize.size12!),
-                  margin: EdgeInsets.all(MySize.size12!),
-                  decoration: BoxDecoration(
-                    borderRadius:
-                        BorderRadius.all(Radius.circular(MySize.size8!)),
-                    color: customAppTheme.bgLayer1,
-                    border:
-                        Border.all(color: customAppTheme.bgLayer4, width: 1.2),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Icon(
-                            (showFilter)
-                                ? MdiIcons.chevronUp
-                                : MdiIcons.chevronDown,
-                            color: themeData.colorScheme.primary,
-                          ),
-                          Row(
-                            children: [
-                              Text(
-                                AppLocalizations.of(context)
-                                    .translate('filter'),
-                                style: AppTheme.getTextStyle(
-                                    themeData.textTheme.headline6,
-                                    color: themeData.colorScheme.primary,
-                                    fontWeight: 700),
-                              ),
-                              Icon(
-                                MdiIcons.filter,
-                                color: themeData.colorScheme.primary,
-                              )
-                            ],
-                          ),
-                        ],
-                      ),
-                      (showFilter)
-                          ? Column(
-                              children: [
-                                Row(
-                                  children: [
-                                    Text(
-                                      "${AppLocalizations.of(context).translate('location')} : ",
-                                      style: AppTheme.getTextStyle(
-                                          themeData.textTheme.bodyText1,
-                                          fontWeight: 600),
-                                    ),
-                                    locations()
-                                  ],
-                                ),
-                                Row(
-                                  children: [
-                                    Text(
-                                      "${AppLocalizations.of(context).translate('customer')} : ",
-                                      style: AppTheme.getTextStyle(
-                                          themeData.textTheme.bodyText1,
-                                          fontWeight: 600),
-                                    ),
-                                    Expanded(child: customers())
-                                  ],
-                                ),
-                                GestureDetector(
-                                  onTap: () {
-                                    Navigator.of(context)
-                                        .push(new MaterialPageRoute<Null>(
-                                            builder: (BuildContext context) {
-                                              return dateRangePicker();
-                                            },
-                                            fullscreenDialog: true));
-                                  },
-                                  child: Container(
-                                    padding: EdgeInsets.all(MySize.size8!),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.all(
-                                          Radius.circular(MySize.size8!)),
-                                      color: customAppTheme.bgLayer1,
-                                      border: Border.all(
-                                          color: customAppTheme.bgLayer4,
-                                          width: 2),
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        Text(
-                                            (startDateRange != null &&
-                                                    endDateRange != null)
-                                                ? "$startDateRange   -   $endDateRange"
-                                                : "Date range",
-                                            style: AppTheme.getTextStyle(
-                                                themeData.textTheme.bodyText1,
-                                                fontWeight: 600)),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                Padding(
-                                  padding: EdgeInsets.symmetric(
-                                      vertical: MySize.size6!),
-                                ),
-                                Row(
-                                  children: [
-                                    Text(
-                                      "${AppLocalizations.of(context).translate('payment_status')} : ",
-                                      style: AppTheme.getTextStyle(
-                                          themeData.textTheme.bodyText1,
-                                          fontWeight: 600),
-                                    ),
-                                    (paymentStatuses.length > 0)
-                                        ? paymentStatus()
-                                        : Container()
-                                  ],
-                                ),
-                                Padding(
-                                  padding: EdgeInsets.symmetric(
-                                      vertical: MySize.size6!),
-                                ),
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    ElevatedButton(
-                                      style: ElevatedButton.styleFrom(
-                                        shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                                MySize.size20!),
-                                            side: BorderSide(
-                                                color: themeData
-                                                    .colorScheme.primary)),
-                                        onPrimary:
-                                            themeData.colorScheme.primary,
-                                      ),
-                                      child: Text(
-                                        AppLocalizations.of(context)
-                                            .translate('reset'),
-                                        style: AppTheme.getTextStyle(
-                                            themeData.textTheme.button,
-                                            color:
-                                                themeData.colorScheme.onPrimary,
-                                            fontWeight: 600),
-                                      ),
-                                      onPressed: () {
-                                        setState(() {
-                                          selectedLocation = locationListMap[0];
-                                          selectedCustomer = customerListMap[0];
-                                          startDateRange = null;
-                                          endDateRange = null;
-                                          selectedPaymentStatus =
-                                              paymentStatuses[0];
-                                        });
-                                        onFilter();
-                                      },
-                                    ),
-                                    ElevatedButton(
-                                      style: ElevatedButton.styleFrom(
-                                        shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                                MySize.size20!),
-                                            side: BorderSide(
-                                                color: themeData
-                                                    .colorScheme.primary)),
-                                        onPrimary:
-                                            themeData.colorScheme.primary,
-                                      ),
-                                      child: Text(
-                                        AppLocalizations.of(context)
-                                            .translate('ok'),
-                                        style: AppTheme.getTextStyle(
-                                            themeData.textTheme.button,
-                                            color:
-                                                themeData.colorScheme.onPrimary,
-                                            fontWeight: 600),
-                                      ),
-                                      onPressed: () {
-                                        onFilter();
-                                      },
-                                    ),
-                                  ],
-                                )
-                                // Padding(padding: EdgeInsets.symmetric(vertical: MySize.size6),), Row(children: [Text("${AppLocalizations.of(context).translate('invoice_status')} : ", style: AppTheme.getTextStyle(themeData.textTheme.bodyText1, fontWeight: 600),), invoiceStatus()],),
-                              ],
-                            )
-                          : Container()
-                    ],
-                  ),
-                ),
-              ),
-              Expanded(
-                child: (allSalesListMap.length > 0)
-                    ? ListView.builder(
-                        padding: EdgeInsets.all(10),
-                        shrinkWrap: true,
-                        controller: _scrollController,
-                        itemCount: allSalesListMap.length,
-                        itemBuilder: (context, index) {
-                          if (index == allSalesListMap.length) {
-                            return (isLoading)
-                                ? _buildProgressIndicator()
-                                : Container();
-                          }
-                          else {
-                            return allSellItem(
-                                index: index,
-                                price: allSalesListMap[index]['invoice_amount'],
-                                number: allSalesListMap[index]['invoice_no'],
-                                time: allSalesListMap[index]['date_time'],
-                                status: allSalesListMap[index]['status'],
-                                paid: allSalesListMap[index]['paid_amount'],
-                                customerName: allSalesListMap[index]
-                                    ['contact_name'],
-                                locationName: allSalesListMap[index]
-                                    ['location_name'],
-                                isQuotation: int.parse(allSalesListMap[index]
-                                        ['is_quotation']
-                                    .toString()));
-                          }
-                        })
-                    : Helper().noDataWidget(context),
-              )
-            ],
-          )
-        : Center(
-            child: Text(
-              AppLocalizations.of(context).translate('unauthorised'),
-              style: TextStyle(color: Colors.black),
+      children: [
+        GestureDetector(
+          onTap: () {
+            setState(() {
+              showFilter = !showFilter;
+            });
+          },
+          child: Container(
+            padding: EdgeInsets.all(MySize.size12!),
+            margin: EdgeInsets.all(MySize.size12!),
+            decoration: BoxDecoration(
+              borderRadius:
+              BorderRadius.all(Radius.circular(MySize.size8!)),
+              color: customAppTheme.bgLayer1,
+              border:
+              Border.all(color: customAppTheme.bgLayer4, width: 1.2),
             ),
-          );
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Icon(
+                      (showFilter)
+                          ? MdiIcons.chevronUp
+                          : MdiIcons.chevronDown,
+                      color: themeData.colorScheme.primary,
+                    ),
+                    Row(
+                      children: [
+                        Text(
+                          AppLocalizations.of(context)
+                              .translate('filter'),
+                          style: AppTheme.getTextStyle(
+                              themeData.textTheme.headline6,
+                              color: themeData.colorScheme.primary,
+                              fontWeight: 700),
+                        ),
+                        Icon(
+                          MdiIcons.filter,
+                          color: themeData.colorScheme.primary,
+                        )
+                      ],
+                    ),
+                  ],
+                ),
+                (showFilter)
+                    ? Column(
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          "${AppLocalizations.of(context).translate('location')} : ",
+                          style: AppTheme.getTextStyle(
+                              themeData.textTheme.bodyText1,
+                              fontWeight: 600),
+                        ),
+                        locations()
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        Text(
+                          "${AppLocalizations.of(context).translate('customer')} : ",
+                          style: AppTheme.getTextStyle(
+                              themeData.textTheme.bodyText1,
+                              fontWeight: 600),
+                        ),
+                        Expanded(child: customers())
+                      ],
+                    ),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.of(context)
+                            .push(new MaterialPageRoute<Null>(
+                            builder: (BuildContext context) {
+                              return dateRangePicker();
+                            },
+                            fullscreenDialog: true));
+                      },
+                      child: Container(
+                        padding: EdgeInsets.all(MySize.size8!),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.all(
+                              Radius.circular(MySize.size8!)),
+                          color: customAppTheme.bgLayer1,
+                          border: Border.all(
+                              color: customAppTheme.bgLayer4,
+                              width: 2),
+                        ),
+                        child: Row(
+                          mainAxisAlignment:
+                          MainAxisAlignment.center,
+                          children: [
+                            Text(
+                                (startDateRange != null &&
+                                    endDateRange != null)
+                                    ? "$startDateRange   -   $endDateRange"
+                                    : "Date range",
+                                style: AppTheme.getTextStyle(
+                                    themeData.textTheme.bodyText1,
+                                    fontWeight: 600)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.symmetric(
+                          vertical: MySize.size6!),
+                    ),
+                    Row(
+                      children: [
+                        Text(
+                          "${AppLocalizations.of(context).translate('payment_status')} : ",
+                          style: AppTheme.getTextStyle(
+                              themeData.textTheme.bodyText1,
+                              fontWeight: 600),
+                        ),
+                        (paymentStatuses.length > 0)
+                            ? paymentStatus()
+                            : Container()
+                      ],
+                    ),
+                    Padding(
+                      padding: EdgeInsets.symmetric(
+                          vertical: MySize.size6!),
+                    ),
+                    Row(
+                      mainAxisAlignment:
+                      MainAxisAlignment.spaceBetween,
+                      children: [
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                    MySize.size20!),
+                                side: BorderSide(
+                                    color: themeData
+                                        .colorScheme.primary)),
+                            onPrimary:
+                            themeData.colorScheme.primary,
+                          ),
+                          child: Text(
+                            AppLocalizations.of(context)
+                                .translate('reset'),
+                            style: AppTheme.getTextStyle(
+                                themeData.textTheme.button,
+                                color:
+                                themeData.colorScheme.onPrimary,
+                                fontWeight: 600),
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              selectedLocation = locationListMap[0];
+                              selectedCustomer = customerListMap[0];
+                              startDateRange = null;
+                              endDateRange = null;
+                              selectedPaymentStatus =
+                              paymentStatuses[0];
+                            });
+                            onFilter();
+                          },
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                    MySize.size20!),
+                                side: BorderSide(
+                                    color: themeData
+                                        .colorScheme.primary)),
+                            onPrimary:
+                            themeData.colorScheme.primary,
+                          ),
+                          child: Text(
+                            AppLocalizations.of(context)
+                                .translate('ok'),
+                            style: AppTheme.getTextStyle(
+                                themeData.textTheme.button,
+                                color:
+                                themeData.colorScheme.onPrimary,
+                                fontWeight: 600),
+                          ),
+                          onPressed: () {
+                            onFilter();
+                          },
+                        ),
+                      ],
+                    )
+                    // Padding(padding: EdgeInsets.symmetric(vertical: MySize.size6),), Row(children: [Text("${AppLocalizations.of(context).translate('invoice_status')} : ", style: AppTheme.getTextStyle(themeData.textTheme.bodyText1, fontWeight: 600),), invoiceStatus()],),
+                  ],
+                )
+                    : Container()
+              ],
+            ),
+          ),
+        ),
+        Expanded(
+          child: (allSalesListMap.length > 0)
+              ? ListView.builder(
+              padding: EdgeInsets.all(10),
+              shrinkWrap: true,
+              controller: _scrollController,
+              itemCount: allSalesListMap.length,
+              itemBuilder: (context, index) {
+                if (index == allSalesListMap.length) {
+                  return (isLoading)
+                      ? _buildProgressIndicator()
+                      : Container();
+                }
+                else {
+                  return allSellItem(
+                      index: index,
+                      price: allSalesListMap[index]['invoice_amount'],
+                      number: allSalesListMap[index]['invoice_no'],
+                      time: allSalesListMap[index]['date_time'],
+                      status: allSalesListMap[index]['status'],
+                      paid: allSalesListMap[index]['paid_amount'],
+                      customerName: allSalesListMap[index]
+                      ['contact_name'],
+                      locationName: allSalesListMap[index]
+                      ['location_name'],
+                      isQuotation: int.parse(allSalesListMap[index]
+                      ['is_quotation']
+                          .toString()));
+                }
+              })
+              : Helper().noDataWidget(context),
+        )
+      ],
+    )
+        : Center(
+      child: Text(
+        AppLocalizations.of(context).translate('unauthorised'),
+        style: TextStyle(color: Colors.black),
+      ),
+    );
   }
 
   Widget dateRangePicker() {
@@ -1136,18 +1204,18 @@ class _SalesState extends State<Sales> {
                         })
                         : Container(),
                     // Add Sell Return button
-                IconButton(
-                  icon: Icon(Icons.arrow_back),
-                  color: Colors.orange,
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => SellReturn(saleId: sellList[index]['id']),
-                      ),
-                    );
-                  },
-                ),
+                    IconButton(
+                      icon: Icon(Icons.arrow_back),
+                      color: Colors.orange,
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => SellReturn(saleId: sellList[index]['id']),
+                          ),
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -1180,7 +1248,7 @@ class _SalesState extends State<Sales> {
                       child: (isSynced == 0)
                           ? Icon(
                         MdiIcons.syncAlert,
-                        color: Colors.black,
+                        color: Colors.red,
                       )
                           : Container(),
                     ),
@@ -1196,304 +1264,319 @@ class _SalesState extends State<Sales> {
 
 
   //all sales listing widget
-  Widget allSellItem(
-      {number,
-      time,
-      status,
-      price,
-      paid,
-      isSynced,
-      customerName,
-      locationName,
-      isQuotation,
-      index}) {
-    //Logic for row items
-    double space = MySize.size12!;
+  Widget allSellItem({
+    required String number,
+    required String time,
+    required String status,
+    required String price,
+    required String paid,
+    bool isSynced = true, // Made optional with default value
+    required String customerName,
+    required String locationName,
+    required int isQuotation,
+    int? index,
+  }) {
+    double parsedPrice = double.tryParse(price) ?? 0.0;
+    String formattedPrice = parsedPrice.toStringAsFixed(2);
+
+    // Constants for consistent spacing
+    final double padding = 12.0;
+    final double borderRadius = 8.0;
+
     return Container(
-      padding: EdgeInsets.only(left: space, right: space, top: space),
-      margin: EdgeInsets.only(top: MySize.size0!, bottom: space),
+      padding: EdgeInsets.all(padding),
+      margin: EdgeInsets.only(bottom: padding),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.all(Radius.circular(MySize.size8!)),
+        borderRadius: BorderRadius.circular(borderRadius),
         color: customAppTheme.bgLayer1,
         border: Border.all(color: customAppTheme.bgLayer4, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 6,
+            offset: Offset(0, 2),
+          ),
+        ],
       ),
-      child: Stack(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header row with time and status badge
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                time,
+                style: themeData.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: themeData.colorScheme.onBackground.withAlpha(160),
+                ),
+              ),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(borderRadius),
+                  color: isQuotation == 0
+                      ? checkStatusColor(status)
+                      : Colors.orange,
+                ),
+                child: Text(
+                  isQuotation == 0 ? status.toUpperCase() : 'QUOTATION',
+                  style: themeData.textTheme.labelSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: isQuotation == 0
+                        ? Colors.white
+                        : Colors.amber[900],
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          SizedBox(height: 8),
+
+          // Main content
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(time,
-                  style: AppTheme.getTextStyle(themeData.textTheme.bodyMedium,
-                      fontWeight: 600,
-                      letterSpacing: -0.2,
-                      color:
-                          themeData.colorScheme.onBackground.withAlpha(160))),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        (isQuotation == 0)
-                            ? AppLocalizations.of(context)
-                                    .translate('invoice_no') +
-                                " $number"
-                            : AppLocalizations.of(context).translate('ref_no') +
-                                " $number",
-                        style: AppTheme.getTextStyle(
-                            themeData.textTheme.subtitle1,
-                            fontWeight: 700,
-                            letterSpacing: -0.2),
-                      ),
-                      Text(
-                        AppLocalizations.of(context)
-                                .translate('invoice_amount') +
-                            " $symbol $price",
-                        style: AppTheme.getTextStyle(
-                            themeData.textTheme.bodyText2,
-                            fontWeight: 600,
-                            letterSpacing: 0),
-                      ),
-                      (isQuotation == 0)
-                          ? Text(
-                              AppLocalizations.of(context)
-                                      .translate('paid_amount') +
-                                  " $symbol $paid",
-                              style: AppTheme.getTextStyle(
-                                  themeData.textTheme.bodyText2,
-                                  fontWeight: 600,
-                                  letterSpacing: 0),
-                            )
-                          : SizedBox(),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "${AppLocalizations.of(context).translate('customer_name')}: ",
-                            style: AppTheme.getTextStyle(
-                                themeData.textTheme.bodyText2,
-                                fontWeight: 600,
-                                letterSpacing: 0),
-                          ),
-                          SizedBox(
-                            width: MySize.screenWidth! * 0.6,
-                            child: Text(
-                              "$customerName",
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTheme.getTextStyle(
-                                  themeData.textTheme.bodyText2,
-                                  fontWeight: 600,
-                                  letterSpacing: 0),
-                            ),
-                          ),
-                        ],
-                      ),
-                      Text(
-                        AppLocalizations.of(context)
-                                .translate('location_name') +
-                            ": $locationName",
-                        maxLines: 3,
-                        style: AppTheme.getTextStyle(
-                            themeData.textTheme.bodyText2,
-                            fontWeight: 600,
-                            letterSpacing: 0),
-                      ),
-                    ],
-                  ),
-                ],
+            children: [
+              // Document number
+              Text(
+                isQuotation == 0
+                    ? '${AppLocalizations.of(context).translate('invoice_no')} $number'
+                    : '${AppLocalizations.of(context).translate('ref_no')} $number',
+                style: themeData.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: <Widget>[
-                  Visibility(
-                    visible: index != null,
-                    child: Row(
-                      children: [
-                        // (canEditSell) ? IconButton(icon: Icon(MdiIcons.fileDocumentEditOutline, color: themeData.colorScheme.onBackground,), onPressed: () {Navigator.push(context, '/cart', arguments: Helper().argument(locId: sellList[index]['location_id'], sellId: sellList[index]['id'], isQuotation: sellList[index]['is_quotation']));}) : Container(),
-                        (canDeleteSell)
-                            ? IconButton(
-                                icon: Icon(
-                                  MdiIcons.deleteOutline,
-                                  color: Colors.red,
-                                ),
-                                onPressed: () {
-                                  showDialog(
-                                    barrierDismissible: true,
-                                    context: context,
-                                    builder: (BuildContext context) {
-                                      return AlertDialog(
-                                        title: Icon(
-                                          MdiIcons.alert,
-                                          color: Colors.red,
-                                          size: MySize.size50,
-                                        ),
-                                        content: Text(
-                                            AppLocalizations.of(context)
-                                                .translate('are_you_sure'),
-                                            textAlign: TextAlign.center,
-                                            style: AppTheme.getTextStyle(
-                                                themeData.textTheme.bodyText1,
-                                                color: themeData
-                                                    .colorScheme.onBackground,
-                                                fontWeight: 600,
-                                                muted: true)),
-                                        actions: <Widget>[
-                                          TextButton(
-                                              style: TextButton.styleFrom(
-                                                  backgroundColor: themeData
-                                                      .colorScheme.onPrimary,
-                                                  primary: themeData
-                                                      .colorScheme.primary),
-                                              onPressed: () {
-                                                Navigator.pop(context);
-                                              },
-                                              child: Text(
-                                                  AppLocalizations.of(context)
-                                                      .translate('cancel'))),
-                                          TextButton(
-                                              style: TextButton.styleFrom(
-                                                  backgroundColor: Colors.red,
-                                                  primary: themeData
-                                                      .colorScheme.onError),
-                                              onPressed: () async {
-                                                Navigator.pop(context);
-                                                await SellApi()
-                                                    .delete(
-                                                        allSalesListMap[index]
-                                                            ['id'])
-                                                    .then((value) {
-                                                  if (value != null) {
-                                                    setState(() {
-                                                      allSalesListMap
-                                                          .removeAt(index);
-                                                    });
-                                                    Fluttertoast.showToast(
-                                                        msg: '${value['msg']}');
-                                                  }
-                                                });
-                                              },
-                                              child: Text(
-                                                  AppLocalizations.of(context)
-                                                      .translate('ok')))
-                                        ],
-                                      );
-                                    },
-                                  );
-                                })
-                            : Container(),
-                        Visibility(
-                          visible:
-                              allSalesListMap[index]['invoice_url'] != null,
-                          child: IconButton(
-                              icon: Icon(
-                                MdiIcons.printerWireless,
-                                color: Colors.deepPurple,
-                              ),
-                              onPressed: () async {
-                                if (await Helper().checkConnectivity()) {
-                                  final response = await http.Client().get(
-                                      Uri.parse(allSalesListMap[index]
-                                          ['invoice_url']));
-                                  if (response.statusCode == 200) {
-                                    await Helper().printDocument(0, 0, context,
-                                        invoice: response.body);
-                                  } else {
-                                    Fluttertoast.showToast(
-                                        msg: AppLocalizations.of(context)
-                                            .translate('something_went_wrong'));
-                                  }
-                                } else {
-                                  Fluttertoast.showToast(
-                                      msg: AppLocalizations.of(context)
-                                          .translate('check_connectivity'));
-                                }
-                              }),
-                        ),
-                        Visibility(
-                          visible:
-                              allSalesListMap[index]['invoice_url'] != null,
-                          child: IconButton(
-                              icon: Icon(
-                                MdiIcons.shareVariant,
-                                color: themeData.colorScheme.primary,
-                              ),
-                              onPressed: () async {
-                                if (await Helper().checkConnectivity()) {
-                                  // print(allSalesListMap[index]
-                                  // ['invoice_url']);
-                                  final response = await http.Client().get(
-                                      Uri.parse(allSalesListMap[index]
-                                          ['invoice_url']));
-                                  // print(response.body);
-                                  if (response.statusCode == 200) {
-                                    await Helper().savePdf(0, 0, context,
-                                        allSalesListMap[index]['invoice_no'],
-                                        invoice: response.body);
-                                  } else {
-                                    Fluttertoast.showToast(
-                                        msg: AppLocalizations.of(context)
-                                            .translate('something_went_wrong'));
-                                  }
-                                } else {
-                                  Fluttertoast.showToast(
-                                      msg: AppLocalizations.of(context)
-                                          .translate('check_connectivity'));
-                                }
-                              }),
-                        ),
-                        Visibility(
-                          visible: (allSalesListMap[index]['mobile'] != null &&
-                              allSalesListMap[index]['status']
-                                      .toString()
-                                      .toLowerCase() !=
-                                  'paid'),
-                          child: IconButton(
-                              icon: Icon(
-                                Icons.call_outlined,
-                                color: Colors.green,
-                              ),
-                              onPressed: () async {
-                                await launch(
-                                    'tel:${allSalesListMap[index]['mobile']}');
-                              }),
-                        ),
-                        // Add Sell Return button
 
-                      ],
+              SizedBox(height: 8),
+
+              // Amount information
+              _buildInfoRow(
+                label: AppLocalizations.of(context).translate('invoice_amount'),
+                value: '$symbol $price',
+                isImportant: true,
+              ),
+
+              if (isQuotation == 0)
+                _buildInfoRow(
+                  label: AppLocalizations.of(context).translate('paid_amount'),
+                  value: '$symbol $paid',
+                ),
+
+              SizedBox(height: 4),
+
+              // Customer name
+              _buildInfoRow(
+                label: AppLocalizations.of(context).translate('customer_name'),
+                value: customerName,
+                isLongText: true,
+              ),
+
+              // Location name
+              _buildInfoRow(
+                label: AppLocalizations.of(context).translate('location_name'),
+                value: locationName,
+              ),
+            ],
+          ),
+
+          SizedBox(height: 12),
+
+          // Action buttons
+          if (index != null) _buildActionButtons(index),
+
+          // Sync status indicator
+          if (!isSynced)
+            Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Icon(
+                    MdiIcons.syncAlert,
+                    size: 16,
+                    color: Colors.lightGreen,
+                  ),
+                  SizedBox(width: 4),
+                  Text(
+                    AppLocalizations.of(context).translate('not_synced'),
+                    style: themeData.textTheme.labelSmall?.copyWith(
+                      color: Colors.lightGreen,
                     ),
                   ),
                 ],
               ),
-            ],
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              Container(
-                padding: EdgeInsets.only(
-                    left: MySize.size12!,
-                    right: MySize.size12!,
-                    top: MySize.size8!,
-                    bottom: MySize.size8!),
-                decoration: BoxDecoration(
-                    borderRadius:
-                        BorderRadius.all(Radius.circular(MySize.size4!)),
-                    color: (isQuotation == 0)
-                        ? checkStatusColor(status)
-                        : Colors.yellowAccent),
-                child: Text(
-                  (isQuotation == 0) ? status.toUpperCase() : 'QUOTATION',
-                  style: AppTheme.getTextStyle(themeData.textTheme.caption,
-                      fontSize: 12, fontWeight: 700, letterSpacing: 0.2),
-                ),
-              ),
-            ],
-          )
+            ),
         ],
       ),
     );
+  }
+
+// Helper widget for consistent info rows
+  Widget _buildInfoRow({
+    required String label,
+    required String value,
+    bool isImportant = false,
+    bool isLongText = false,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$label: ',
+            style: themeData.textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: themeData.colorScheme.onBackground.withAlpha(180),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              maxLines: isLongText ? 2 : 1,
+              overflow: TextOverflow.ellipsis,
+              style: themeData.textTheme.bodySmall?.copyWith(
+                fontWeight: isImportant ? FontWeight.w700 : FontWeight.w600,
+                color: isImportant
+                    ? themeData.colorScheme.primary
+                    : themeData.colorScheme.onBackground,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+// Action buttons row
+  Widget _buildActionButtons(int index) {
+    return Row(
+      children: [
+        if (canDeleteSell)
+          _buildActionButton(
+            icon: Icons.delete_outline,
+            color: Colors.red,
+            onPressed: () => _showDeleteConfirmation(index),
+          ),
+
+        if (allSalesListMap[index]['invoice_url'] != null) ...[
+          _buildActionButton(
+            icon: Icons.print_outlined,
+            color: Colors.deepPurple,
+            onPressed: () => _handlePrintAction(index),
+          ),
+          _buildActionButton(
+            icon: Icons.share_outlined,
+            color: themeData.colorScheme.primary,
+            onPressed: () => _handleShareAction(index),
+          ),
+        ],
+
+        if (allSalesListMap[index]['mobile'] != null &&
+            allSalesListMap[index]['status'].toString().toLowerCase() != 'paid')
+          _buildActionButton(
+            icon: Icons.call_outlined,
+            color: Colors.green,
+            onPressed: () => _handleCallAction(index),
+          ),
+
+        // Sell Return button
+
+      ],
+    );
+  }
+
+// Reusable action button
+  Widget _buildActionButton({
+    required IconData icon,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return IconButton(
+      icon: Icon(icon, size: 20),
+      color: color,
+      padding: EdgeInsets.symmetric(horizontal: 8),
+      constraints: BoxConstraints(),
+      onPressed: onPressed,
+    );
+  }
+
+// Delete confirmation dialog
+  void _showDeleteConfirmation(int index) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: Icon(Icons.warning_amber_rounded, color: Colors.red, size: 40),
+        title: Text(AppLocalizations.of(context).translate('are_you_sure')),
+        actions: [
+          TextButton(
+            child: Text(AppLocalizations.of(context).translate('cancel')),
+            onPressed: () => Navigator.pop(context),
+          ),
+          TextButton(
+            child: Text(AppLocalizations.of(context).translate('ok')),
+            style: TextButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              Navigator.pop(context);
+              await _deleteSale(index);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deleteSale(int index) async {
+    final response = await SellApi().delete(allSalesListMap[index]['id']);
+    if (response != null) {
+      setState(() => allSalesListMap.removeAt(index));
+      Fluttertoast.showToast(msg: '${response['msg']}');
+    }
+  }
+
+  Future<void> _handlePrintAction(int index) async {
+    if (!await Helper().checkConnectivity()) {
+      Fluttertoast.showToast(
+          msg: AppLocalizations.of(context).translate('check_connectivity'));
+      return;
+    }
+
+    final response = await http.Client().get(
+        Uri.parse(allSalesListMap[index]['invoice_url']));
+
+    if (response.statusCode == 200) {
+      await Helper().printDocument(0, 0, context, invoice: response.body);
+    } else {
+      Fluttertoast.showToast(
+          msg: AppLocalizations.of(context).translate('something_went_wrong'));
+    }
+  }
+
+  Future<void> _handleShareAction(int index) async {
+    if (!await Helper().checkConnectivity()) {
+      Fluttertoast.showToast(
+          msg: AppLocalizations.of(context).translate('check_connectivity'));
+      return;
+    }
+
+    final response = await http.Client().get(
+        Uri.parse(allSalesListMap[index]['invoice_url']));
+
+    if (response.statusCode == 200) {
+      await Helper().savePdf(
+          0, 0, context,
+          allSalesListMap[index]['invoice_no'],
+          invoice: response.body);
+    } else {
+      Fluttertoast.showToast(
+          msg: AppLocalizations.of(context).translate('something_went_wrong'));
+    }
+  }
+
+  Future<void> _handleCallAction(int index) async {
+    await launch('tel:${allSalesListMap[index]['mobile']}');
   }
 
   Widget customers() {
@@ -1678,11 +1761,9 @@ class _SalesState extends State<Sales> {
   //status color
   Color checkStatusColor(String? status) {
     if (status != null) {
-      if (status.toLowerCase() == AppLocalizations.of(context).translate('paid'))
-
+      if (status.toLowerCase() == 'paid')
         return Colors.green;
       else if (status.toLowerCase() == 'due')
-
         return Colors.red;
       else
         return Colors.orange;
@@ -1690,14 +1771,14 @@ class _SalesState extends State<Sales> {
       return Colors.black12;
     }
   }
-
   //status status of recent sales
   String checkStatus(double invoiceAmount, double pendingAmount) {
     if (pendingAmount == invoiceAmount)
       return 'due';
     else if (pendingAmount >= 0.01)
-      return AppLocalizations.of(context).translate('partial');
+      return 'partial';
     else
-      return AppLocalizations.of(context).translate('paid');
+      return 'paid';
   }
+
 }

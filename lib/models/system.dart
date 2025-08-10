@@ -8,37 +8,179 @@ class System {
   late DbProvider dbProvider;
 
   System() {
-    dbProvider = new DbProvider();
+    dbProvider = DbProvider();
   }
 
-  //store system data
-  Future<int> insert(key, value, [keyId]) async {
+  // ----- DATABASE OPERATIONS -----
+
+  /// Insert a key-value pair into the system table
+  Future<int> insert(String key, dynamic value, [int? keyId]) async {
     final db = await dbProvider.database;
-    var data = {'key': '$key', 'keyId': keyId, 'value': value};
-    var response = await db.insert('system', data);
-    return response;
+    var data = {
+      'key': key,
+      'keyId': keyId,
+      'value': value,
+    };
+    return await db.insert('system', data);
   }
 
-//save user details
+  /// Get a value from the system table by key
+  Future<dynamic> get(String key, [int? keyId]) async {
+    final db = await dbProvider.database;
+    String where = keyId != null ? 'and keyId = $keyId' : '';
+    List<Map<String, dynamic>> result =
+    await db.query('system', where: 'key = ? $where', whereArgs: [key]);
+    return (result.isNotEmpty) ? jsonDecode(result[0]['value']) : [];
+  }
+
+  /// Delete a specific key from the system table
+  Future<int> delete(String colName) async {
+    final db = await dbProvider.database;
+    return await db.delete('system', where: 'key = ?', whereArgs: [colName]);
+  }
+
+  /// Empty the entire system table
+  Future<int> empty() async {
+    final db = await dbProvider.database;
+    return await db.delete('system');
+  }
+
+  // ----- USER MANAGEMENT -----
+
+  /// Save user details to the system table
   Future<int> insertUserDetails(Map userDetails) async {
     final db = await dbProvider.database;
     var data = {'key': 'loggedInUser', 'value': jsonEncode(userDetails)};
-    var response = await db.insert('system', data);
-    return response;
+    return await db.insert('system', data);
   }
 
-  //store token
+  /// Get the current logged-in user
+  Future<Map<String, dynamic>> getCurrentUser() async {
+    final db = await dbProvider.database;
+    var result = await db.query('system', where: 'key = ?', whereArgs: ['loggedInUser']);
+
+    if (result.isEmpty) {
+      throw Exception('No user logged in');
+    }
+
+    return jsonDecode(result[0]['value'].toString());
+  }
+
+  /// Get the current user's ID
+  Future<int> getCurrentUserId() async {
+    try {
+      final user = await getCurrentUser();
+      final userId = int.parse(user['id'].toString());
+      print('[DEBUG] Current User ID from DB: $userId'); // Debug log
+      return userId;
+    } catch (e) {
+      print('[ERROR] Failed to get current user ID: $e');
+      return 0; // Fallback value
+    }
+  }
+
+  // ----- AUTHENTICATION -----
+
+  /// Store authentication token
   Future<int> insertToken(String token) async {
     final db = await dbProvider.database;
     var data = {'key': 'token', 'value': token};
-    var response = await db.insert('system', data);
-    return response;
+    return await db.insert('system', data);
   }
 
-  insertProductLastSyncDateTimeNow() async {
-    //if already present then update, else insert new
+  /// Get stored authentication token
+  Future<String> getToken() async {
     final db = await dbProvider.database;
-    String? lastSync = await this.getProductLastSync();
+    var result = await db.query('system', where: 'key = ?', whereArgs: ['token']);
+    if (result.isEmpty) {
+      throw Exception('No token found');
+    }
+    return result[0]['value'].toString();
+  }
+
+  // ----- PERMISSIONS -----
+
+  /// Store user permissions
+  Future<void> storePermissions() async {
+    final db = await dbProvider.database;
+    var result = await get('loggedInUser');
+    if (result.containsKey('all_permissions')) {
+      var userData = {
+        'key': 'user_permissions',
+        'value': jsonEncode(result['all_permissions'])
+      };
+      await db.insert('system', userData);
+    }
+  }
+
+  /// Get user permissions
+  Future<List> getPermission() async {
+    var result = await get('loggedInUser');
+    if (result.containsKey('is_admin') && result['is_admin'] == true) {
+      return ['all'];
+    } else {
+      List permissions = await get('user_permissions');
+      return permissions;
+    }
+  }
+
+  /// Refresh the permission list
+  Future<void> refreshPermissionList() async {
+    final db = await dbProvider.database;
+    await db.delete('system', where: 'key = ?', whereArgs: ['user_permissions']);
+    await Permissions().get();
+  }
+
+  // ----- LOCATION MANAGEMENT -----
+
+  /// Get the current location
+  Future<Map<String, dynamic>?> getCurrentLocation() async {
+    try {
+      final db = await dbProvider.database;
+      var result = await db.query('system', where: 'key = ?', whereArgs: ['current_location']);
+
+      if (result.isNotEmpty) {
+        return jsonDecode(result[0]['value'].toString());
+      }
+
+      // Fallback to first location if current not set
+      final locations = await get('location');
+      if (locations != null && locations.isNotEmpty) {
+        return locations.first;
+      }
+      return null;
+    } catch (e) {
+      print('Error getting current location: $e');
+      return null;
+    }
+  }
+
+  /// Set the current location
+  Future<void> setCurrentLocation(Map<String, dynamic> location) async {
+    final db = await dbProvider.database;
+    var existing = await db.query('system', where: 'key = ?', whereArgs: ['current_location']);
+
+    if (existing.isNotEmpty) {
+      await db.update(
+        'system',
+        {'value': jsonEncode(location)},
+        where: 'key = ?',
+        whereArgs: ['current_location'],
+      );
+    } else {
+      await db.insert('system', {
+        'key': 'current_location',
+        'value': jsonEncode(location),
+      });
+    }
+  }
+
+  // ----- SYNC MANAGEMENT -----
+
+  /// Insert or update product last sync datetime
+  Future<void> insertProductLastSyncDateTimeNow() async {
+    final db = await dbProvider.database;
+    String? lastSync = await getProductLastSync();
 
     if (lastSync == null) {
       var data = {
@@ -52,149 +194,66 @@ class System {
     }
   }
 
-  // insert/update/get call_log_last_sync time
-  callLogLastSyncDateTime([bool? insert]) async {
-    //if already present then update, else insert new
-    final db = await dbProvider.database;
-    var lastSyncDetail = await db
-        .query('system', where: 'key = ?', whereArgs: ['call_logs_last_sync']);
-    var lastSync =
-        (lastSyncDetail.isNotEmpty) ? lastSyncDetail[0]['value'] : null;
-
-    if (insert == true && lastSync == null) {
-      await db.insert('system',
-          {'key': 'call_logs_last_sync', 'value': DateTime.now().toString()});
-      return lastSync;
-    } else if (insert == true) {
-      db.update('system', {'value': DateTime.now().toString()},
-          where: 'key = ?', whereArgs: ['call_logs_last_sync']);
-      return lastSync;
-    } else {
-      return lastSync;
-    }
-  }
-
+  /// Get product last sync datetime
   Future<dynamic> getProductLastSync() async {
     final db = await dbProvider.database;
     var result = await db
         .query('system', where: 'key = ?', whereArgs: ['product_last_sync']);
-    var response = (result.length > 0) ? result[0]['value'] : null;
-    return response;
+    return (result.isNotEmpty) ? result[0]['value'] : null;
   }
 
-  //fetch token
-  Future<String> getToken() async {
+  /// Manage call log last sync datetime
+  Future<dynamic> callLogLastSyncDateTime([bool? insert]) async {
     final db = await dbProvider.database;
-    var result =
-        await db.query('system', where: 'key = ?', whereArgs: ['token']);
-    String? token = result[0]['value'].toString();
-    return token;
-  }
+    var lastSyncDetail = await db
+        .query('system', where: 'key = ?', whereArgs: ['call_logs_last_sync']);
+    var lastSync =
+    (lastSyncDetail.isNotEmpty) ? lastSyncDetail[0]['value'] : null;
 
-  // Return permission list
-  Future<List> getPermission() async {
-    var result = await this.get('loggedInUser');
-    if (result.containsKey('is_admin') && result['is_admin'] == true) {
-      return ['all'];
-    } else {
-      List permissions = await this.get('user_permissions');
-      return permissions;
+    if (insert == true && lastSync == null) {
+      await db.insert('system',
+          {'key': 'call_logs_last_sync', 'value': DateTime.now().toString()});
+    } else if (insert == true) {
+      await db.update('system', {'value': DateTime.now().toString()},
+          where: 'key = ?', whereArgs: ['call_logs_last_sync']);
     }
+
+    return lastSync;
   }
 
-  //Return the list of categories.
+  // ----- DATA RETRIEVAL METHODS -----
+
+  /// Get categories list
   Future<List> getCategories() async {
-    var categories = await this.get('taxonomy');
-
-    if (categories.length > 0) {
-      return categories;
-    } else {
-      return [];
-    }
+    var categories = await get('taxonomy');
+    return categories.isNotEmpty ? categories : [];
   }
 
-  //Return the list of sub categories.
-  Future<List> getSubCategories(parentId) async {
+  /// Get subcategories by parent ID
+  Future<List> getSubCategories(int parentId) async {
     final db = await dbProvider.database;
     String where = 'and keyId = $parentId';
     var subCategories = await db.query('system',
         where: 'key = ? $where', whereArgs: ['sub_categories']);
-    if (subCategories.length > 0) {
-      return subCategories;
-    } else {
-      return [];
-    }
+    return subCategories.isNotEmpty ? subCategories : [];
   }
 
-  //Return the list of brands.
+  /// Get brands list
   Future<List> getBrands() async {
-    var brands = await this.get('brand');
-    if (brands.length > 0) {
-      return brands;
-    } else {
-      return [];
-    }
+    var brands = await get('brand');
+    return brands.isNotEmpty ? brands : [];
   }
 
-  storePermissions() async {
-    final db = await dbProvider.database;
-    var result = await this.get('loggedInUser');
-    if (result.containsKey('all_permissions')) {
-      var userData = {
-        'key': 'user_permissions',
-        'value': jsonEncode(result['all_permissions'])
-      };
-      await db.insert('system', userData);
-    }
-  }
-
-  //Return the list of payment accounts.
+  /// Get payment accounts list
   Future<List> getPaymentAccounts() async {
-    var accounts = await this.get('payment_accounts');
-    if (accounts.length > 0) {
-      return accounts;
-    } else {
-      return [];
-    }
+    var accounts = await get('payment_accounts');
+    return accounts.isNotEmpty ? accounts : [];
   }
 
-  //get brandList,categoryList,taxRateList,locationList,permissionList
-  Future<dynamic> get(key, [keyId]) async {
-    final db = await dbProvider.database;
-    String where = '';
-    if (keyId != null) {
-      where = 'and keyId = $keyId';
-    }
-    List<Map<String, dynamic>> result =
-        await db.query('system', where: 'key = ? $where', whereArgs: ['$key']);
-    var response = (result.length > 0) ? jsonDecode(result[0]['value']) : [];
-    return response;
-  }
+  // ----- SYSTEM REFRESH -----
 
-  //empty system table
-  Future<int> empty() async {
-    final db = await dbProvider.database;
-    var response = await db.delete('system');
-    return response;
-  }
-
-  //delete column from system table
-  Future<int> delete(colName) async {
-    final db = await dbProvider.database;
-    var response =
-        await db.delete('system', where: 'key = ?', whereArgs: ['$colName']);
-    return response;
-  }
-
-  refreshPermissionList() async {
-    final db = await dbProvider.database;
-    await db
-        .delete('system', where: 'key = ?', whereArgs: ['user_permissions']);
-    await Permissions().get();
-  }
-
-  //delete column from system table
-  refresh() async {
+  /// Refresh all system data
+  Future<void> refresh() async {
     final db = await dbProvider.database;
     List colNames = [
       'business',
@@ -209,10 +268,16 @@ class System {
       'sub_categories',
       'payment_accounts'
     ];
-    Contact().emptyContact();
-    colNames.forEach((element) async {
-      await db.delete('system', where: 'key = ?', whereArgs: ['$element']);
-    });
+
+    // Clear contacts
+    await Contact().emptyContact();
+
+    // Clear all listed system data
+    for (var element in colNames) {
+      await db.delete('system', where: 'key = ?', whereArgs: [element]);
+    }
+
+    // Reload system data
     await SystemApi().store();
   }
 }

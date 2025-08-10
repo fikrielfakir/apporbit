@@ -22,7 +22,64 @@ import '../models/system.dart';
 import 'AppTheme.dart';
 import 'SizeConfig.dart';
 import '../models/database.dart';
+class SyncNotification extends StatelessWidget {
+  final String message;
+  final VoidCallback? onRetry;
 
+  const SyncNotification({
+    Key? key,
+    required this.message,
+    this.onRetry,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      elevation: 4,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        width: double.infinity,
+        color: Colors.red,
+        child: SafeArea(
+          bottom: false,
+          child: Row(
+            children: [
+              Icon(Icons.sync_problem, color: Colors.white),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  message,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              if (onRetry != null)
+                TextButton(
+                  style: TextButton.styleFrom(
+                    primary: Colors.white,
+                    backgroundColor: Colors.red[700],
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                  ),
+                  onPressed: onRetry,
+                  child: Text(
+                    AppLocalizations.of(context).translate('retry'),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 class Helper {
   static int themeType = 1;
   late DbProvider dbProvider;
@@ -50,7 +107,7 @@ class Helper {
     try {
       double convertAmount = double.parse(amount.toString());
       return NumberFormat.currency(
-        symbol: 'MAD',
+        symbol: '',
         decimalDigits: Config.currencyPrecision,
       ).format(convertAmount);
     } catch (e) {
@@ -206,11 +263,20 @@ class Helper {
   // Print a PDF document
   Future<void> printDocument(int sellId, int taxId, BuildContext context, {String? invoice}) async {
     try {
-      String _invoice = invoice ?? await InvoiceFormatter().generateInvoice(sellId, taxId, context);
+      final user = await System().get('loggedInUser');
+      final userName = ((user['surname'] ?? "") + ' ' + user['first_name']).trim();
+
+      String _invoice = invoice ?? await InvoiceFormatter(
+        userName: userName,
+      ).generateInvoice(sellId, taxId, context);
+
+      final customPageFormat = pd.PdfPageFormat(311, 792); // 110mm width
+
       await Printing.layoutPdf(
-        onLayout: (pd.PdfPageFormat format) async {
+        format: customPageFormat,
+        onLayout: (format) async {
           return await Printing.convertHtml(
-            format: format,
+            format: customPageFormat, // keep consistent with layoutPdf
             html: _invoice,
           );
         },
@@ -219,6 +285,7 @@ class Helper {
       print("Error printing document: $e");
     }
   }
+
 
   // Request app permissions
   Future<Map<Permission, PermissionStatus>> requestAppPermission() async {
@@ -258,12 +325,19 @@ class Helper {
   // Save and share a PDF invoice
   Future<void> savePdf(int sellId, int taxId, BuildContext context, String invoiceNo, {String? invoice}) async {
     try {
-      String _invoice = invoice ?? await InvoiceFormatter().generateInvoice(sellId, taxId, context);
+      // Get user data
+      final user = await System().get('loggedInUser');
+      final userName = ((user['surname'] != null) ? user['surname'] : "") + ' ' + user['first_name'];
+
+      // Generate invoice HTML
+      String _invoice = invoice ?? await InvoiceFormatter(
+          userName: userName
+      ).generateInvoice(sellId, taxId, context);
       var targetPath = await getTemporaryDirectory();
       var targetFileName = "invoice_no_${Random().nextInt(100)}.pdf";
       final String path = '${targetPath.path}/$targetFileName';
       final pdfDocument = await Printing.convertHtml(
-        format: pd.PdfPageFormat(5595.44, 841),
+        format: pd.PdfPageFormat(555.44, 841),
         html: _invoice,
       );
       await File(path).writeAsBytes(pdfDocument);
@@ -378,5 +452,19 @@ class Helper {
     } catch (e) {
       return dateString;
     }
+  }
+
+  // In helpers/otherHelpers.dart
+  static double validateReturnAmount(String value, double maxAmount) {
+    double amount = double.tryParse(value) ?? 0.0;
+    return amount > maxAmount ? maxAmount : amount;
+  }
+
+  static String getCurrencySymbol() {
+    // You can replace this with your actual currency symbol logic
+    // For example, you might get it from app settings or localization
+    return 'MAD'; // Default to Indian Rupee symbol
+    // Or you could use: return '€'; for Euro
+    // Or return '\$'; for Dollar
   }
 }

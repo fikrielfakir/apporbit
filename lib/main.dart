@@ -12,6 +12,7 @@ import 'pages/notifications/view_model_manger/notifications_cubit.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   //orientation setting
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   AppLanguage appLanguage = AppLanguage();

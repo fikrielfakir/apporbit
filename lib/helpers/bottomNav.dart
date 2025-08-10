@@ -1,4 +1,4 @@
-import 'package:flashy_tab_bar2/flashy_tab_bar2.dart';
+import 'package:convex_bottom_bar/convex_bottom_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:geolocator/geolocator.dart';
@@ -10,7 +10,6 @@ import 'package:pos_final/pages/home.dart';
 import 'package:pos_final/pages/home/home_screen.dart';
 import 'package:pos_final/pages/products.dart';
 import 'package:pos_final/pages/sales.dart';
-
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config.dart';
@@ -20,6 +19,7 @@ import '../models/paymentDatabase.dart';
 import '../models/sellDatabase.dart';
 import '../models/system.dart';
 import '../pages/login.dart';
+import '../pages/stock_transfer_list_screen.dart';
 import 'AppTheme.dart';
 import 'SizeConfig.dart';
 import 'icons.dart';
@@ -34,7 +34,7 @@ class Layout extends StatefulWidget {
 
 class _LayoutState extends State<Layout> {
   var user,
-      note = new TextEditingController(),
+      note = TextEditingController(),
       clockInTime = DateTime.now(),
       selectedLanguage;
   LatLng? currentLoc;
@@ -63,7 +63,6 @@ class _LayoutState extends State<Layout> {
       syncPressed = false;
   bool? checkedIn;
 
-  // List sells;
   Map<String, dynamic>? paymentMethods;
   int? totalSales;
   List<Map> method = [], payments = [];
@@ -73,7 +72,13 @@ class _LayoutState extends State<Layout> {
   CustomAppTheme customAppTheme = AppTheme.getCustomAppTheme(themeType);
 
   int _selectedIndex = 0;
-  List<Widget> pages_index = <Widget>[Home(),CategoryScreen(),Products(), Sales()];
+  final List<Widget> pages_index = <Widget>[
+    Home(),
+    StockTransferListScreen(),
+    Products(),
+    Sales()
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -82,22 +87,50 @@ class _LayoutState extends State<Layout> {
     Helper().syncCallLogs();
   }
 
-  checkIOButtonDisplay() async {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: pages_index.elementAt(_selectedIndex),
+        bottomNavigationBar: ConvexAppBar(
+          style: TabStyle.react, // Changed from fixedCircle to react
+          backgroundColor: Colors.white,
+          color: Colors.grey[600],
+          activeColor: const Color(0xFF9e1e63),
+          items: [
+            TabItem(icon: Icons.home_outlined, title: AppLocalizations.of(context).translate('home')),
+            TabItem(icon: Icons.compare_arrows, title: AppLocalizations.of(context).translate('stock_transfer')),
+            TabItem(icon: Icons.shopping_bag_outlined, title: AppLocalizations.of(context).translate('products')),
+            TabItem(icon: Icons.bar_chart_outlined, title: AppLocalizations.of(context).translate('sales')),
+          ],
+          initialActiveIndex: _selectedIndex,
+          onTap: _changePage,
+          height: 60,
+        ),
+    );
+  }
+
+  void _changePage(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
+
+  // ========== Keep all existing methods below ========== //
+
+  Future<void> checkIOButtonDisplay() async {
     await Attendance().getCheckInTime(Config.userId).then((value) {
       if (value != null) {
         clockInTime = DateTime.parse(value);
       }
     });
-    //if someone has forget to check-in
-    //check attendance status
+
     var activeSubscriptionDetails = await System().get('active-subscription');
-    if (activeSubscriptionDetails.length > 0 &&
+    if (activeSubscriptionDetails.isNotEmpty &&
         activeSubscriptionDetails[0].containsKey('package_details')) {
       Map<String, dynamic> packageDetails =
-          activeSubscriptionDetails[0]['package_details'];
+      activeSubscriptionDetails[0]['package_details'];
       if (packageDetails.containsKey('essentials_module') &&
           packageDetails['essentials_module'].toString() == '1') {
-        //get attendance status(check-In/check-Out)
         checkedIn = await Attendance().getAttendanceStatus(Config.userId);
         setState(() {});
       } else {
@@ -112,7 +145,7 @@ class _LayoutState extends State<Layout> {
     }
   }
 
-  homepageData() async {
+  Future<void> homepageData() async {
     var prefs = await SharedPreferences.getInstance();
     user = await System().get('loggedInUser');
     userName = ((user['surname'] != null) ? user['surname'] : "") +
@@ -131,43 +164,6 @@ class _LayoutState extends State<Layout> {
     setState(() {});
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: pages_index.elementAt(_selectedIndex),
-      bottomNavigationBar: FlashyTabBar(
-        selectedIndex: _selectedIndex,
-        showElevation: true,
-        onItemSelected: _changePage,
-        items: [
-          FlashyTabBarItem(
-            icon: Icon(IconBroken.Home),
-            title: Text(AppLocalizations.of(context).translate('home')),
-          ),
-          FlashyTabBarItem(
-            icon: Icon(IconBroken.Category),
-            title: Text(AppLocalizations.of(context).translate('Categories')),
-          ),
-          FlashyTabBarItem(
-            icon: Icon(IconBroken.Buy),
-            title: Text(AppLocalizations.of(context).translate('products')),
-          ),
-          FlashyTabBarItem(
-            icon: Icon(IconBroken.Chart),
-            title: Text(AppLocalizations.of(context).translate('sales')),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _changePage(int value) {
-    print(value);
-    setState(() {
-      _selectedIndex = value;
-    });
-  }
-
   Widget paymentDetails() {
     return Container(
       padding: EdgeInsets.all(MySize.size8!),
@@ -179,64 +175,66 @@ class _LayoutState extends State<Layout> {
       ),
       child: Column(
         children: <Widget>[
-          Text(AppLocalizations.of(context).translate('payment_details'),
-              style: AppTheme.getTextStyle(themeData.textTheme.subtitle1,
-                  fontWeight: 700, letterSpacing: -0.2)),
+          Text(
+            AppLocalizations.of(context).translate('payment_details'),
+            style: AppTheme.getTextStyle(
+              themeData.textTheme.subtitle1,
+              fontWeight: 700,
+              letterSpacing: -0.2,
+            ),
+          ),
           ListView.builder(
-              physics: NeverScrollableScrollPhysics(),
-              padding: EdgeInsets.all(10),
-              itemCount: method.length,
-              shrinkWrap: true,
-              itemBuilder: (context, index) {
-                return Container(
-                  padding: EdgeInsets.only(bottom: 5),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: <Widget>[
-                      Column(
-                        mainAxisAlignment: MainAxisAlignment.start,
-                        children: <Widget>[
-                          Row(
-                            children: <Widget>[
-                              Container(
-                                height: 30,
-                                width: 2,
-                                decoration: BoxDecoration(
-                                  color: Colors.blue.withOpacity(0.5),
-                                  borderRadius:
-                                      BorderRadius.all(Radius.circular(4.0)),
-                                ),
-                              ),
-                              Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 2)),
-                              Text(method[index]['key']),
-                            ],
-                          )
-                        ],
-                      ),
-                      Padding(padding: EdgeInsets.symmetric(horizontal: 4)),
-                      Column(
-                          mainAxisAlignment: MainAxisAlignment.end,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(10),
+            itemCount: method.length,
+            shrinkWrap: true,
+            itemBuilder: (context, index) {
+              return Container(
+                padding: const EdgeInsets.only(bottom: 5),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: <Widget>[
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      children: <Widget>[
+                        Row(
                           children: <Widget>[
-                            Text('$businessSymbol ' +
-                                Helper().formatCurrency(method[index]['value']))
-                          ])
-                    ],
-                  ),
-                );
-              })
+                            Container(
+                              height: 30,
+                              width: 2,
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withOpacity(0.5),
+                                borderRadius: const BorderRadius.all(Radius.circular(4.0)),
+                              ),
+                            ),
+                            const Padding(padding: EdgeInsets.symmetric(horizontal: 2)),
+                            Text(method[index]['key']),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const Padding(padding: EdgeInsets.symmetric(horizontal: 4)),
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: <Widget>[
+                        Text('$businessSymbol ' + Helper().formatCurrency(method[index]['value']))
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
         ],
       ),
     );
   }
 
-//get permission
-  getPermission() async {
+  Future<void> getPermission() async {
     List<PermissionStatus> status = [
       await Permission.location.status,
       await Permission.storage.status,
       await Permission.camera.status,
-      // await Permission.phone.status,
     ];
     notPermitted = status.contains(PermissionStatus.denied);
     await Helper()
@@ -262,7 +260,6 @@ class _LayoutState extends State<Layout> {
     }
   }
 
-//checkIn and checkOut button
   Widget checkIO() {
     if (checkedIn != null) {
       return Padding(
@@ -285,9 +282,9 @@ class _LayoutState extends State<Layout> {
                         title: Text(
                             (!checkedIn!)
                                 ? AppLocalizations.of(context)
-                                    .translate('check_in_note')
+                                .translate('check_in_note')
                                 : AppLocalizations.of(context)
-                                    .translate('check_out_note'),
+                                .translate('check_out_note'),
                             textAlign: TextAlign.center,
                             style: AppTheme.getTextStyle(
                                 themeData.textTheme.headline6,
@@ -312,27 +309,23 @@ class _LayoutState extends State<Layout> {
                               if (await Helper().checkConnectivity()) {
                                 try {
                                   await Geolocator.getCurrentPosition(
-                                          desiredAccuracy:
-                                              LocationAccuracy.high)
+                                      desiredAccuracy:
+                                      LocationAccuracy.high)
                                       .then((Position position) {
                                     // currentLoc = LatLng(position.latitude,
                                     //     position.longitude);
                                   });
                                 } catch (e) {}
                                 if (checkedIn == false) {
-                                  //get ip address
                                   var ipAddress =
-                                      IpAddress(type: RequestType.json);
-
-                                  /// Get the IpAddress based on requestType.
+                                  IpAddress(type: RequestType.json);
                                   dynamic data = await ipAddress.getIpAddress();
                                   String iP = data.toString();
 
-                                  //get current location
                                   try {
                                     await Geolocator.getCurrentPosition(
-                                            desiredAccuracy:
-                                                LocationAccuracy.high)
+                                        desiredAccuracy:
+                                        LocationAccuracy.high)
                                         .then((Position position) {
                                       currentLoc = LatLng(position.latitude,
                                           position.longitude);
@@ -351,26 +344,25 @@ class _LayoutState extends State<Layout> {
                                   Fluttertoast.showToast(msg: checkInMap);
                                   note.clear();
                                 } else {
-                                  //get current location
                                   try {
                                     await Geolocator.getCurrentPosition(
-                                            desiredAccuracy:
-                                                LocationAccuracy.high)
+                                        desiredAccuracy:
+                                        LocationAccuracy.high)
                                         .then((Position position) {
                                       currentLoc = LatLng(position.latitude,
                                           position.longitude);
                                     });
                                   } catch (e) {}
 
-                                  var checkOutMap = await Attendance()
-                                      .doCheckOut(
-                                          latitude: (currentLoc != null)
-                                              ? currentLoc!.latitude
-                                              : '',
-                                          longitude: (currentLoc != null)
-                                              ? currentLoc!.longitude
-                                              : '',
-                                          checkOutNote: note.text);
+                                  var checkOutMap =
+                                  await Attendance().doCheckOut(
+                                      latitude: (currentLoc != null)
+                                          ? currentLoc!.latitude
+                                          : '',
+                                      longitude: (currentLoc != null)
+                                          ? currentLoc!.longitude
+                                          : '',
+                                      checkOutNote: note.text);
                                   Fluttertoast.showToast(msg: checkOutMap);
                                   note.clear();
                                 }
@@ -405,15 +397,15 @@ class _LayoutState extends State<Layout> {
               },
               child: (!checkedIn!)
                   ? Text(AppLocalizations.of(context).translate('check_in'),
-                      style: AppTheme.getTextStyle(
-                          themeData.textTheme.headline6,
-                          color: themeData.colorScheme.background,
-                          fontWeight: 600))
+                  style: AppTheme.getTextStyle(
+                      themeData.textTheme.headline6,
+                      color: themeData.colorScheme.background,
+                      fontWeight: 600))
                   : Text(AppLocalizations.of(context).translate('check_out'),
-                      style: AppTheme.getTextStyle(
-                          themeData.textTheme.headline6,
-                          color: themeData.colorScheme.primary,
-                          fontWeight: 600)),
+                  style: AppTheme.getTextStyle(
+                      themeData.textTheme.headline6,
+                      color: themeData.colorScheme.primary,
+                      fontWeight: 600)),
             ),
             Text(
                 (!checkedIn!)
@@ -426,18 +418,18 @@ class _LayoutState extends State<Layout> {
           ],
         ),
       );
-    } else
+    } else {
       return Container();
+    }
   }
 
-//load statistics
   Future<List> loadStatistics() async {
     List result = await SellDatabase().getSells();
     totalSales = result.length;
     setState(() {
       result.forEach((sell) async {
         List payment =
-            await PaymentDatabase().get(sell['id'], allColumns: true);
+        await PaymentDatabase().get(sell['id'], allColumns: true);
         var paidAmount = 0.0;
         var returnAmount = 0.0;
         payment.forEach((element) {
@@ -451,19 +443,16 @@ class _LayoutState extends State<Layout> {
         });
         totalSalesAmount = (totalSalesAmount + sell['invoice_amount']);
         totalReceivedAmount =
-            (totalReceivedAmount + (paidAmount - returnAmount));
+        (totalReceivedAmount + (paidAmount - returnAmount));
         totalDueAmount = (totalDueAmount + sell['pending_amount']);
       });
     });
     return result;
   }
 
-//load payment details
-  loadPaymentDetails() async {
+  Future<void> loadPaymentDetails() async {
     var paymentMethod = [];
-    //fetch different payment methods
     await System().get('payment_methods').then((value) {
-      //Add all PaymentMethods into a List according to key value pair
       value.forEach((element) {
         element.forEach((k, v) {
           paymentMethod.add({'key': '$k', 'value': '$v'});
@@ -472,7 +461,7 @@ class _LayoutState extends State<Layout> {
     });
 
     await loadStatistics().then((value) {
-      Future.delayed(Duration(seconds: 1), () {
+      Future.delayed(const Duration(seconds: 1), () {
         payments.forEach((row) {
           if (row['key'] == 'cash') {
             byCash += row['value'];
@@ -523,7 +512,7 @@ class _LayoutState extends State<Layout> {
           if (byCustomPayment_3 > 0 && row['key'] == 'custom_pay_3')
             method.add({'key': row['value'], 'value': byCustomPayment_3});
         });
-        if (this.mounted) {
+        if (mounted) {
           setState(() {});
         }
       });

@@ -40,7 +40,8 @@ class _ProductsState extends State<Products> {
       canAddSell = false,
       canViewProducts = false,
       usePriceGroup = true,
-      isLoading = false; // Variable para controlar el estado de carga
+      isLoading = false,
+      _isRefreshing = false;
 
   int selectedLocationId = 0,
       categoryId = 0,
@@ -61,42 +62,53 @@ class _ProductsState extends State<Products> {
   ];
 
   String symbol = '';
-  Timer? _refreshTimer;
   String url =
       'https://www.youtube.com/watch?v=l3Jvigvxsvc&ab_channel=TheInspiringDad';
   final searchController = TextEditingController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final _formKey = GlobalKey<FormState>();
   ScrollController _scrollController = new ScrollController();
+  Timer? _searchDebouncer;
+  bool hasReachedMax = false;
 
   @override
   void dispose() {
     searchController.dispose();
     _scrollController.dispose();
+    _searchDebouncer?.cancel();
+    _scrollDebouncer?.cancel();
     super.dispose();
   }
 
+  Timer? _scrollDebouncer;
   @override
   initState() {
     super.initState();
     getPermission();
+
+
     _scrollController.addListener(() {
-      if (_scrollController.position.pixels ==
-          _scrollController.position.maxScrollExtent) {
-        productList();
-      }
+      if (_scrollDebouncer?.isActive ?? false) _scrollDebouncer?.cancel();
+
+      _scrollDebouncer = Timer(const Duration(milliseconds: 300), () {
+        if (_scrollController.position.pixels >=
+            _scrollController.position.maxScrollExtent * 0.8 &&
+            !isLoading &&
+            !hasReachedMax) {
+          productList();
+        }
+      });
     });
+
     setLocationMap();
     categoryList();
     subCategoryList(categoryId);
     brandList();
     Helper().syncCallLogs();
   }
-
   @override
   Future<void> didChangeDependencies() async {
     argument = ModalRoute.of(context)!.settings.arguments as Map?;
-    //Arguments sellId & locationId is send from edit.
     if (argument != null) {
       Future.delayed(Duration(milliseconds: 200), () {
         if (this.mounted) {
@@ -113,9 +125,83 @@ class _ProductsState extends State<Products> {
     super.didChangeDependencies();
   }
 
+
+  Future<void> syncProducts() async {
+    if (!mounted || isLoading) return;
+
+    setState(() => isLoading = true);
+
+    try {
+      // Clear existing data
+      setState(() {
+        products = [];
+        offset = 0;
+        hasReachedMax = false;
+      });
+
+      // Force sync from server
+      await Variations().refresh();
+      await System().insertProductLastSyncDateTimeNow();
+
+      // Reload data
+      await productList();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content:
+            Text(AppLocalizations.of(context).translate('sync_complete'))),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(
+                '${AppLocalizations.of(context).translate('sync_failed')}: ${e.toString()}')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _handleRefresh() async {
+    if (_isRefreshing) return;
+
+    setState(() {
+      _isRefreshing = true;
+      products = [];
+      offset = 0;
+      hasReachedMax = false;
+    });
+
+    try {
+      await productList();
+    } finally {
+      if (mounted) {
+        setState(() => _isRefreshing = false);
+      }
+    }
+  }
+
+  void _onSearchChanged() {
+    if (_searchDebouncer?.isActive ?? false) _searchDebouncer?.cancel();
+
+    _searchDebouncer = Timer(const Duration(milliseconds: 500), () {
+      if (!mounted) return;
+
+      setState(() {
+        products = [];
+        offset = 0;
+        hasReachedMax = false;
+      });
+      productList();
+    });
+  }
+
+
   //Set location & product
+
   setInitDetails(selectedLocationId) async {
-    //check subscription
     var activeSubscriptionDetails = await System().get('active-subscription');
     if (activeSubscriptionDetails.length > 0) {
       setState(() {
@@ -128,7 +214,16 @@ class _ProductsState extends State<Products> {
     await Helper().getFormattedBusinessDetails().then((value) {
       symbol = value['symbol'] + ' ';
     });
-    await setDefaultLocation(selectedLocationId);
+    bool usePriceGroup = false;
+    await setDefaultLocation(selectedLocationId).then((_) {
+      bool hasGroup = locationListMap.any((element) =>
+      element['id'] == selectedLocationId &&
+          element['selling_price_group_id'] != null);
+
+      setState(() {
+        usePriceGroup = hasGroup;
+      });
+    });
     products = [];
     offset = 0;
     productList();
@@ -161,8 +256,9 @@ class _ProductsState extends State<Products> {
       sellingPriceGroupId = 0;
     }
   }
-
   //set product list
+  // In the productList() method around line 301, the error is with type assignment
+
   productList() async {
     setState(() {
       isLoading = true; // Activar el indicador de carga
@@ -276,6 +372,8 @@ class _ProductsState extends State<Products> {
   priceGroupList() async {
     setState(() {
       _priceGroupMenuItems = [];
+
+      // Always add the false option
       _priceGroupMenuItems.add(
         DropdownMenuItem(
           child: Text(AppLocalizations.of(context)
@@ -284,18 +382,24 @@ class _ProductsState extends State<Products> {
         ),
       );
 
-      locationListMap.forEach((element) {
-        if (element['id'] == selectedLocationId &&
-            element['selling_price_group_id'] != null) {
-          _priceGroupMenuItems.add(
-            DropdownMenuItem(
-              child: Text(AppLocalizations.of(context)
-                  .translate('default_price_group')),
-              value: true,
-            ),
-          );
-        }
-      });
+      // Check if current location has a price group
+      bool hasPriceGroup = locationListMap.any((element) =>
+      element['id'] == selectedLocationId &&
+          element['selling_price_group_id'] != null);
+
+      // Only add true option if location has price group
+      if (hasPriceGroup) {
+        _priceGroupMenuItems.add(
+          DropdownMenuItem(
+            child: Text(AppLocalizations.of(context)
+                .translate('default_price_group')),
+            value: true,
+          ),
+        );
+      }
+
+      // Update usePriceGroup to match available options
+      usePriceGroup = hasPriceGroup;
     });
   }
 
@@ -342,11 +446,23 @@ class _ProductsState extends State<Products> {
         appBar: AppBar(
           elevation: 0,
           title: Text(
-              AppLocalizations.of(context).translate('products'),
-              style: AppTheme.getTextStyle(themeData.textTheme.headline6, fontWeight: 600)
+            AppLocalizations.of(context).translate('products'),
+            style: AppTheme.getTextStyle(
+                themeData.textTheme.headline6, fontWeight: 600),
           ),
           leading: null,
           actions: <Widget>[
+            IconButton(
+              icon: isLoading
+                  ? SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+                  : Icon(Icons.sync),
+              onPressed: isLoading ? null : syncProducts,
+              tooltip: AppLocalizations.of(context).translate('sync_products'),
+            ),
             locations(),
             badges.Badge(
               badgeStyle: BadgeStyle(badgeColor: Colors.red),
@@ -359,50 +475,39 @@ class _ProductsState extends State<Products> {
                     return Center(
                       child: Text(
                           snapshot.hasData ? '${snapshot.data}' : "0",
-                          style: TextStyle(color: Colors.white)
-                      ),
+                          style: TextStyle(color: Colors.white)),
                     );
-                  }
-              ),
+                  }),
               child: IconButton(
-                  icon: Icon(IconBroken.Buy, size: 30, color: Color(0xff4c53a5)),
+                  icon: Icon(IconBroken.Buy,
+                      size: 44, color: Color(0xff4c53a5)),
                   onPressed: () {
                     if (argument != null) {
-                      Navigator.pushReplacementNamed(
-                          context,
-                          '/cart',
+                      Navigator.pushReplacementNamed(context, '/cart',
                           arguments: Helper().argument(
                               locId: argument!['locationId'],
-                              sellId: argument!['sellId']
-                          )
-                      );
+                              sellId: argument!['sellId']));
                     } else if (selectedLocationId != 0 && cartCount > 0) {
                       Navigator.pushNamed(
-                          context,
-                          '/cart',
-                          arguments: Helper().argument(locId: selectedLocationId)
+                        context,
+                        '/cart',
+                        arguments:
+                        Helper().argument(locId: selectedLocationId),
                       );
                     } else if (cartCount == 0) {
                       Fluttertoast.showToast(
-                          msg: AppLocalizations.of(context).translate('no_items_added_to_cart')
-                      );
+                          msg: AppLocalizations.of(context)
+                              .translate('no_items_added_to_cart'));
                     }
-                  }
-              ),
+                  }),
             )
           ],
         ),
-        body: isLoading
+        body: isLoading && products.isEmpty
             ? Center(child: CircularProgressIndicator())
             : !canViewProducts
             ? RefreshIndicator(
-          onRefresh: () async {
-            setState(() {
-              isLoading = true;
-            });
-            await getPermission();
-            await productList();
-          },
+          onRefresh: _handleRefresh,
           child: ListView(
             physics: AlwaysScrollableScrollPhysics(),
             children: [
@@ -410,7 +515,8 @@ class _ProductsState extends State<Products> {
                 height: MediaQuery.of(context).size.height * 0.8,
                 child: Center(
                   child: Text(
-                    AppLocalizations.of(context).translate('unauthorised'),
+                    AppLocalizations.of(context)
+                        .translate('unauthorised'),
                     style: TextStyle(color: Colors.black),
                   ),
                 ),
@@ -419,68 +525,146 @@ class _ProductsState extends State<Products> {
           ),
         )
             : RefreshIndicator(
-          onRefresh: () async {
-            setState(() {
-              isLoading = true;
-              products = [];
-              offset = 0;
-            });
-            await productList();
-          },
+          onRefresh: _handleRefresh,
           child: Stack(
             children: [
-              ListView(
+              CustomScrollView(
                 physics: AlwaysScrollableScrollPhysics(),
                 controller: _scrollController,
-                padding: EdgeInsets.zero,
-                children: [
-                  if (selectedLocationId != 0) filter(_scaffoldKey),
+                slivers: [
+                  if (selectedLocationId != 0)
+                    SliverToBoxAdapter(child: filter(_scaffoldKey)),
                   selectedLocationId == 0
-                      ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.location_on),
-                        Text(AppLocalizations.of(context).translate('please_set_a_location')),
-                      ],
+                      ? SliverFillRemaining(
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment:
+                        MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.location_on),
+                          Text(AppLocalizations.of(context)
+                              .translate(
+                              'please_set_a_location')),
+                        ],
+                      ),
                     ),
                   )
                       : products.isEmpty && !isLoading
-                      ? Container(
-                    height: MediaQuery.of(context).size.height * 0.6,
+                      ? SliverFillRemaining(
                     child: Center(
                       child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisAlignment:
+                        MainAxisAlignment.center,
                         children: [
                           Icon(Icons.info_outline),
                           SizedBox(height: 10),
-                          Text(AppLocalizations.of(context).translate('no_products_found')),
+                          Text(AppLocalizations.of(context)
+                              .translate(
+                              'no_products_found')),
                           SizedBox(height: 20),
                           ElevatedButton(
-                            onPressed: () {
-                              setState(() {
-                                isLoading = true;
-                                products = [];
-                                offset = 0;
-                              });
-                              productList();
-                            },
-                            child: Text(AppLocalizations.of(context).translate('refresh')),
+                            onPressed: _handleRefresh,
+                            child: Text(
+                                AppLocalizations.of(context)
+                                    .translate('refresh')),
                           ),
                         ],
                       ),
                     ),
                   )
-                      : _productsList(),
+                      : gridView
+                      ? SliverGrid(
+                    delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                        return InkWell(
+                          onTap: () async {
+                            onTapProduct(index);
+                          },
+                          child: _ProductGridWidget(
+                            name: products[index]
+                            ['display_name'],
+                            image: products[index]
+                            ['product_image_url'],
+                            qtyAvailable: (products[index]
+                            ['enable_stock'] !=
+                                0)
+                                ? products[index]
+                            ['stock_available']
+                                .toString()
+                                : '-',
+                            price: double.parse(
+                                products[index]
+                                ['unit_price']
+                                    .toString()),
+                            symbol: symbol,
+                          ),
+                        );
+                      },
+                      childCount: products.length,
+                    ),
+                    gridDelegate:
+                    SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: MySize.size16!,
+                      crossAxisSpacing: MySize.size16!,
+                      childAspectRatio: findAspectRatio(
+                          MediaQuery.of(context)
+                              .size
+                              .width),
+                    ),
+                  )
+                      : SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                        return InkWell(
+                          onTap: () async {
+                            onTapProduct(index);
+                          },
+                          child: _ProductListWidget(
+                            name: products[index]
+                            ['display_name'],
+                            image: products[index]
+                            ['product_image_url'],
+                            qtyAvailable: (products[index]
+                            ['enable_stock'] !=
+                                0)
+                                ? products[index]
+                            ['stock_available']
+                                .toString()
+                                : '-',
+                            price: double.parse(
+                                products[index]
+                                ['unit_price']
+                                    .toString()),
+                            symbol: symbol,
+                          ),
+                        );
+                      },
+                      childCount: products.length,
+                    ),
+                  ),
+                  if (isLoading && products.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: Center(
+                          child: CircularProgressIndicator(),
+                        ),
+                      ),
+                    ),
                 ],
               ),
-              if (isLoading) Center(child: CircularProgressIndicator()),
+              if (_isRefreshing)
+                Center(
+                  child: CircularProgressIndicator(),
+                ),
             ],
           ),
         ),
       ),
     );
   }
+
   Widget _filterDrawer() {
     return Container(
       width: MediaQuery.of(context).size.width * 0.8,
@@ -791,38 +975,41 @@ class _ProductsState extends State<Products> {
               ),
             ),
             Container(
-              padding: EdgeInsets.only(
-                  left: MySize.size16!, right: MySize.size16!, top: 0),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton(
-                    isExpanded: true,
-                    dropdownColor: Colors.white,
-                    icon: Icon(
-                      Icons.arrow_drop_down,
-                    ),
-                    value: usePriceGroup,
-                    items: _priceGroupMenuItems,
-                    onChanged: (bool? newValue) async {
-                      await _showCartResetDialogForPriceGroup();
-                      setState(() {
-                        usePriceGroup = newValue!;
-                        if (changePriceGroup) {
-                          //reset cart items
-                          Sell().resetCart();
-                          //reset all filters & search
-                          brandId = 0;
-                          categoryId = 0;
-                          searchController.clear();
-                          inStock = true;
-                          cartCount = 0;
+                padding: EdgeInsets.only(
+                    left: MySize.size16!, right: MySize.size16!, top: 0),
+                child: DropdownButton<bool>(
+                  isExpanded: true,
+                  dropdownColor: Colors.white,
+                  icon: Icon(Icons.arrow_drop_down),
+                  value: usePriceGroup,
+                  items: _priceGroupMenuItems,
+                  onChanged: (bool? newValue) async {
+                    if (newValue == null) return;
 
-                          products = [];
-                          offset = 0;
-                          productList();
-                        }
-                      });
-                    }),
-              ),
+                    // Show confirmation dialog if changing from true to false
+                    if (usePriceGroup && !newValue) {
+                      await _showCartResetDialogForPriceGroup();
+                      if (!changePriceGroup) return;
+                    }
+
+                    setState(() {
+                      usePriceGroup = newValue;
+                      if (changePriceGroup) {
+                        // Reset cart items if price group changed
+                        Sell().resetCart();
+                        // Reset filters
+                        brandId = 0;
+                        categoryId = 0;
+                        searchController.clear();
+                        inStock = true;
+                        cartCount = 0;
+                        products = [];
+                        offset = 0;
+                        productList();
+                      }
+                    });
+                  },
+                )
             )
           ],
         ),

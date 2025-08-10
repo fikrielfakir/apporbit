@@ -4,7 +4,6 @@ import 'package:pos_final/config.dart';
 
 import '../helpers/AppTheme.dart';
 import '../helpers/SizeConfig.dart';
-import '../pages/login.dart';
 import 'database.dart';
 
 class FollowUpModel {
@@ -98,17 +97,49 @@ class Contact {
   }
 
   Map<String, dynamic> contactModel(element) {
-    //contact model
     Map<String, dynamic> customer = {
       'id': element['id'],
-      'name': element['supplier_business_name'] ?? element['name'],
+      'name': element['name'],
+      'supplier_business_name': element['supplier_business_name'],
+      'prefix': element['prefix'],
+      'first_name': element['first_name'],
+      'middle_name': element['middle_name'],
+      'last_name': element['last_name'],
+      'email': element['email'],
+      'contact_id': element['contact_id'],
+      'contact_status': element['contact_status'],
+      'tax_number': element['tax_number'],
       'city': element['city'],
       'state': element['state'],
-      'country': element['country'],
+      'refrige_num': element['refrige_num'],
       'address_line_1': element['address_line_1'],
       'address_line_2': element['address_line_2'],
       'zip_code': element['zip_code'],
-      'mobile': element['mobile']
+      'dob': element['dob'],
+      'mobile': element['mobile'],
+      'landline': element['landline'],
+      'alternate_number': element['alternate_number'],
+      'pay_term_number': element['pay_term_number'],
+      'pay_term_type': element['pay_term_type'],
+      'credit_limit': element['credit_limit'],
+      'created_by': element['created_by'],
+      'balance': element['balance'],
+      'total_rp': element['total_rp'],
+      'total_rp_used': element['total_rp_used'],
+      'total_rp_expired': element['total_rp_expired'],
+      'is_default': element['is_default'],
+      'shipping_address': element['shipping_address'],
+      'position': element['position'],
+      'customer_group_id': element['customer_group_id'],
+      'crm_source': element['crm_source'],
+      'crm_life_stage': element['crm_life_stage'],
+      'custom_field1': element['custom_field1'],
+      'custom_field2': element['custom_field2'],
+      'custom_field3': element['custom_field3'],
+      'custom_field4': element['custom_field4'],
+      'deleted_at': element['deleted_at'],
+      'created_at': element['created_at'],
+      'updated_at': element['updated_at'],
     };
     return customer;
   }
@@ -124,7 +155,7 @@ class Contact {
   getCustomerDetailById(id) async {
     final db = await dbProvider.database;
     List response =
-        await db.query('contact', where: 'id = ?', whereArgs: ['$id']);
+    await db.query('contact', where: 'id = ?', whereArgs: ['$id']);
     var customerDetail = (response.length > 0) ? response[0] : null;
     return customerDetail;
   }
@@ -146,6 +177,22 @@ class Contact {
   emptyContact() async {
     final db = await dbProvider.database;
     var response = await db.delete('contact');
+    return response;
+  }
+  updateContact(customer) async {
+    final db = await dbProvider.database;
+    var response = await db.update(
+      'contact',
+      customer,
+      where: 'id = ?',
+      whereArgs: [customer['id']],
+    );
+    return response;
+  }
+
+  deleteContact(id) async {
+    final db = await dbProvider.database;
+    var response = await db.delete('contact', where: 'id = ?', whereArgs: [id]);
     return response;
   }
 }

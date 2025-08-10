@@ -31,7 +31,7 @@ class Routes {
     return {
       '/splash': (context) => Splash(),
       '/onBoarding': (context) => OnBoardingScreen(),
-     // '/login': (context) => Login(),
+      // '/login': (context) => Login(),
       '/login': (context) => LoginScreen(),
       //'/home': (context) => Home(),
       '/home': (context) => HomeScreen(),

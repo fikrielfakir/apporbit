@@ -1,5 +1,5 @@
 import 'dart:async';
-
+import 'dart:convert';
 import 'package:date_time_picker/date_time_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -42,11 +42,13 @@ class CheckOutState extends State<CheckOut> {
   late Map<String, dynamic> paymentLine;
   List sellDetail = [];
   double invoiceAmount = 0.00, pendingAmount = 0.00, changeReturn = 0.00;
-  TextEditingController dateController = new TextEditingController(),
-      saleNote = new TextEditingController(),
-      staffNote = new TextEditingController(),
-      shippingDetails = new TextEditingController(),
-      shippingCharges = new TextEditingController();
+  double returnAmount = 0.00;
+  TextEditingController dateController = TextEditingController(),
+      saleNote = TextEditingController(),
+      staffNote = TextEditingController(),
+      shippingDetails = TextEditingController(),
+      shippingCharges = TextEditingController(),
+      returnAmountController = TextEditingController();
   bool _printInvoice = true,
       printWebInvoice = false,
       saleCreated = false,
@@ -54,20 +56,17 @@ class CheckOutState extends State<CheckOut> {
   static int themeType = 1;
   ThemeData themeData = AppTheme.getThemeFromThemeMode(themeType);
   CustomAppTheme customAppTheme = AppTheme.getCustomAppTheme(themeType);
-
-  // إضافة متغيرات لتخزين الموقع
   double? longitude;
   double? latitude;
-  bool isLocationFetched = false; // Flag to track if location is fetched
+  bool isLocationFetched = false;
 
   @override
   void initState() {
     super.initState();
     getInitDetails();
-    getLocation(); // استدعاء دالة الحصول على الموقع تلقائيًا
+    getLocation();
   }
 
-  // دالة للحصول على الموقع
   Future<void> getLocation() async {
     bool serviceEnabled;
     LocationPermission permission;
@@ -94,22 +93,18 @@ class CheckOutState extends State<CheckOut> {
     setState(() {
       longitude = position.longitude;
       latitude = position.latitude;
-      isLocationFetched = true; // Set the flag to true when location is fetched
+      isLocationFetched = true;
     });
 
-    // يمكنك هنا إضافة أي منطق إضافي تريده بعد الحصول على الموقع
-    // مثل حفظ الموقع في قاعدة البيانات أو إرساله إلى الخادم
     await saveLocationToDatabase(latitude, longitude);
     await sendLocationToServer(latitude, longitude);
   }
 
   Future<void> saveLocationToDatabase(double? lat, double? lon) async {
-    // قم بتنفيذ الكود الخاص بحفظ الموقع في قاعدة البيانات هنا
     print('Location saved to database: Latitude: $lat, Longitude: $lon');
   }
 
   Future<void> sendLocationToServer(double? lat, double? lon) async {
-    // قم بتنفيذ الكود الخاص بإرسال الموقع إلى الخادم هنا
     print('Location sent to server: Latitude: $lat, Longitude: $lon');
   }
 
@@ -128,8 +123,6 @@ class CheckOutState extends State<CheckOut> {
     await System().getPaymentAccounts().then((value) {
       value.forEach((element) {
         List<String> accIds = [];
-        //check if payment account is assigned to any payment method
-        // of selected location.
         payments.forEach((paymentMethod) {
           if ((paymentMethod['account_id'].toString() ==
               element['id'].toString()) &&
@@ -175,6 +168,7 @@ class CheckOutState extends State<CheckOut> {
   void dispose() {
     staffNote.dispose();
     saleNote.dispose();
+    returnAmountController.dispose();
     super.dispose();
   }
 
@@ -186,8 +180,8 @@ class CheckOutState extends State<CheckOut> {
       shippingDetails.text = value[0]['shipping_details'] ?? '';
       saleNote.text = value[0]['sale_note'] ?? '';
       staffNote.text = value[0]['staff_note'] ?? '';
-      invoiceAmount =
-          argument!['invoiceAmount'] + double.parse(shippingCharges.text);
+      returnAmountController.text = value[0]['return_amount'].toString();
+      invoiceAmount =0;
     });
     payments = [];
     List paymentLines = await PaymentDatabase().get(sellId, allColumns: true);
@@ -236,7 +230,6 @@ class CheckOutState extends State<CheckOut> {
         ));
   }
 
-  //payment widget
   Widget paymentBox() {
     return Container(
       margin: EdgeInsets.all(MySize.size3!),
@@ -303,9 +296,7 @@ class CheckOutState extends State<CheckOut> {
                                       textAlign: TextAlign.center,
                                       initialValue: payments[index]['amount']
                                           .toStringAsFixed(2),
-                                      //input formatter will allow only 2 digits after decimal
                                       inputFormatters: [
-                                        // ignore: deprecated_member_use
                                         FilteringTextInputFormatter(
                                             RegExp(r'^(\d+)?\.?\d{0,2}'),
                                             allow: true)
@@ -344,7 +335,6 @@ class CheckOutState extends State<CheckOut> {
                                       Icons.arrow_drop_down,
                                     ),
                                     value: payments[index]['method'],
-                                    //index['tax_rate_id'],
                                     items: paymentMethods
                                         .map<DropdownMenuItem<String>>(
                                             (Map value) {
@@ -397,7 +387,6 @@ class CheckOutState extends State<CheckOut> {
                                       Icons.arrow_drop_down,
                                     ),
                                     value: payments[index]['account_id'],
-                                    //index['tax_rate_id'],
                                     items: paymentAccounts
                                         .map<DropdownMenuItem<int>>(
                                             (Map value) {
@@ -513,9 +502,7 @@ class CheckOutState extends State<CheckOut> {
                                       suffix: Text(symbol),
                                     ),
                                     textAlign: TextAlign.center,
-                                    //input formatter will allow only 2 digits after decimal
                                     inputFormatters: [
-                                      // ignore: deprecated_member_use
                                       FilteringTextInputFormatter(
                                           RegExp(r'^(\d+)?\.?\d{0,2}'),
                                           allow: true)
@@ -540,6 +527,42 @@ class CheckOutState extends State<CheckOut> {
                           ]),
                     ],
                   ),
+                  Row(
+                    children: [
+                      Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                                AppLocalizations.of(context)
+                                    .translate('return_amount') +
+                                    ' : ',
+                                style: AppTheme.getTextStyle(
+                                    themeData.textTheme.bodyText1,
+                                    color: themeData.colorScheme.onBackground,
+                                    fontWeight: 600,
+                                    muted: true)),
+                            SizedBox(
+                                height: MySize.size40,
+                                width: MySize.safeWidth! * 0.5,
+                                child: TextFormField(
+                                    controller: returnAmountController,
+                                    decoration: InputDecoration(
+                                      suffix: Text(symbol),
+                                    ),
+                                    textAlign: TextAlign.center,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter(
+                                          RegExp(r'^(\d+)?\.?\d{0,2}'),
+                                          allow: true)
+                                    ],
+                                    keyboardType: TextInputType.number,
+                                    onChanged: (value) {
+                                      returnAmount = Helper().validateInput(value);
+                                      calculateMultiPayment();
+                                    })),
+                          ]),
+                    ],
+                  ),
                   Container(
                     child: GridView.count(
                         shrinkWrap: true,
@@ -554,7 +577,7 @@ class CheckOutState extends State<CheckOut> {
                         crossAxisSpacing: MySize.size16!,
                         children: <Widget>[
                           block(
-                            amount: Helper().formatCurrency(invoiceAmount),
+                            amount: Helper().formatCurrency(invoiceAmount  - returnAmount),
                             subject: AppLocalizations.of(context)
                                 .translate('total_payble') +
                                 ' : ',
@@ -587,6 +610,15 @@ class CheckOutState extends State<CheckOut> {
                             backgroundColor: Colors.orange,
                             textColor: (pendingAmount >= 0.01)
                                 ? Colors.red
+                                : themeData.colorScheme.onBackground,
+                          ),block(
+                            amount: (returnAmount),
+                            subject: AppLocalizations.of(context)
+                                .translate('return_amount') +
+                                ' : ',
+                            backgroundColor: Colors.orange,
+                            textColor: (returnAmount >= 0.01)
+                                ? Colors.lightGreen
                                 : themeData.colorScheme.onBackground,
                           ),
                         ]),
@@ -638,7 +670,6 @@ class CheckOutState extends State<CheckOut> {
                             ),
                           ],
                         ),
-                        // GestureDetector(onTap: () {setState(() {shareInvoice = !shareInvoice;_printInvoice = !_printInvoice;});}, child: Row(children: <Widget>[Checkbox(value: shareInvoice, onChanged: (newValue) {setState(() {shareInvoice = !shareInvoice;_printInvoice = !_printInvoice;});}), Text("Share invoice : ", /* "${AppLocalizations.of(context).translate('print_invoice')} : ",*/style: AppTheme.getTextStyle(themeData.textTheme.bodyText1, color: themeData.colorScheme.onBackground, fontWeight: 600, muted: true))],),), GestureDetector(onTap: () {setState(() {shareInvoice = !shareInvoice;_printInvoice = !_printInvoice;});}, child: Row(children: <Widget>[Checkbox(value: _printInvoice, onChanged: (newValue) {setState(() {shareInvoice = !shareInvoice;_printInvoice = !_printInvoice;});}), Text("${AppLocalizations.of(context).translate('print_invoice')} : ", style: AppTheme.getTextStyle(themeData.textTheme.bodyText1, color: themeData.colorScheme.onBackground, fontWeight: 600, muted: true))],),),
                         Container(
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -720,7 +751,7 @@ class CheckOutState extends State<CheckOut> {
                             Expanded(
                               flex: 1,
                               child: Visibility(
-                                visible: isLocationFetched, // Show button only if location is fetched
+                                visible: isLocationFetched,
                                 child: ElevatedButton(
                                   style: ElevatedButton.styleFrom(
                                       primary: themeData.colorScheme.onPrimary,
@@ -754,7 +785,7 @@ class CheckOutState extends State<CheckOut> {
                             Expanded(
                               flex: 1,
                               child: Visibility(
-                                visible: isLocationFetched, // Show button only if location is fetched
+                                visible: isLocationFetched,
                                 child: ElevatedButton(
                                   style: ElevatedButton.styleFrom(
                                       primary: themeData.colorScheme.primary,
@@ -795,7 +826,6 @@ class CheckOutState extends State<CheckOut> {
     );
   }
 
-
   block({Color? backgroundColor, String? subject, amount, Color? textColor}) {
     ThemeData themeData = Theme.of(context);
     return Card(
@@ -831,22 +861,26 @@ class CheckOutState extends State<CheckOut> {
     );
   }
 
-  //calculate multiple payment
   calculateMultiPayment() {
     totalPaying = 0.0;
     payments.forEach((element) {
-      totalPaying += element['amount'];
+      totalPaying += element['amount'] ;
     });
-    if (totalPaying > invoiceAmount) {
-      changeReturn = totalPaying - invoiceAmount;
+
+    returnAmount = double.tryParse(returnAmountController.text) ?? 0.0;
+    double adjustedInvoiceAmount = invoiceAmount;
+
+    if (totalPaying > adjustedInvoiceAmount) {
+      changeReturn = totalPaying - adjustedInvoiceAmount;
       pendingAmount = 0.0;
-    } else if (invoiceAmount > totalPaying) {
-      pendingAmount = invoiceAmount - totalPaying;
+    } else if (adjustedInvoiceAmount > totalPaying) {
+      pendingAmount = adjustedInvoiceAmount - totalPaying;
       changeReturn = 0.0;
     } else {
       pendingAmount = 0.0;
       changeReturn = 0.0;
     }
+
     if (this.mounted) {
       setState(() {});
     }
@@ -870,15 +904,14 @@ class CheckOutState extends State<CheckOut> {
     });
   }
 
-  //on submit
   onSubmit() async {
     setState(() {
       isLoading = true;
       saleCreated = true;
     });
-    //value for sell table
 
-    //TODO: remove change return from here and add it to payments
+    returnAmount = double.tryParse(returnAmountController.text) ?? 0.0;
+
     Map<String, dynamic> sell = await Sell().createSell(
         invoiceNo: Config.userId.toString() +
             "_" +
@@ -894,24 +927,22 @@ class CheckOutState extends State<CheckOut> {
         saleNote: saleNote.text,
         saleStatus: 'final',
         sellId: sellId,
-        latiTude: latitude, // إضافة خط العرض
-        longiTude: longitude, // إضافة خط الطول
+        latiTude: latitude,
+        longiTude: longitude,
         shippingCharges: (shippingCharges.text != '')
             ? double.parse(shippingCharges.text)
             : 0.00,
         shippingDetails: shippingDetails.text,
         staffNote: staffNote.text,
         taxId: argument!['taxId'],
-        isQuotation: 0);
+        isQuotation: 0,
+        returnAmount: returnAmount
+    );
 
     var response;
     if (sellId != null) {
-      //update sell
       response = sellId;
       await SellDatabase().updateSells(sellId, sell).then((value) async {
-        //get payment map
-        //TODO: change payment name to payment type.
-        //create payment line
         payments.forEach((element) {
           if (element['id'] != null) {
             paymentLine = {
@@ -936,39 +967,30 @@ class CheckOutState extends State<CheckOut> {
         if (deletedPaymentId.length > 0) {
           PaymentDatabase().deletePaymentLineByIds(deletedPaymentId);
         }
-        //check internet connection and create api sell
         if (await Helper().checkConnectivity()) {
           await Sell()
               .createApiSell(sellId: sellId)
               .then((value) => printOption(response));
         } else {
-          //print option
-
           printOption(response);
         }
       });
     } else {
-      //save sell in database
       response = await SellDatabase().storeSell(sell);
-      //save payments in sell_payments
       Sell().makePayment(payments, response);
       SellDatabase().updateSellLine({'sell_id': response, 'is_completed': 1});
       if (await Helper().checkConnectivity()) {
         await Sell().createApiSell(sellId: response);
       }
-      //print option
       printOption(response);
-
     }
   }
 
-  //print option
   printOption(sellId) async {
     Timer(Duration(seconds: 2), () async {
       List sellDetail = await SellDatabase().getSellBySellId(sellId);
       String? invoice = sellDetail[0]['invoice_url'];
       String invoiceNo = sellDetail[0]['invoice_no'];
-      //print invoice
       if (_printInvoice) {
         if (printWebInvoice && invoice != null) {
           final response = await http.Client().get(Uri.parse(invoice));
@@ -1039,7 +1061,6 @@ class CheckOutState extends State<CheckOut> {
     });
   }
 
-  //alert dialog for amount pending
   alertPending(BuildContext context) {
     AlertDialog alert = new AlertDialog(
       content: Text(AppLocalizations.of(context).translate('pending_message'),
@@ -1078,7 +1099,6 @@ class CheckOutState extends State<CheckOut> {
     );
   }
 
-  //alert dialog for confirmation
   alertConfirm(BuildContext context, index) {
     AlertDialog alert = new AlertDialog(
       title: Icon(
