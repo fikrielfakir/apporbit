@@ -70,9 +70,11 @@ class _ProductsState extends State<Products> {
   ScrollController _scrollController = new ScrollController();
   Timer? _searchDebouncer;
   bool hasReachedMax = false;
+  bool _isDisposed = false;
 
   @override
   void dispose() {
+    _isDisposed = true;
     searchController.dispose();
     _scrollController.dispose();
     _searchDebouncer?.cancel();
@@ -260,53 +262,65 @@ class _ProductsState extends State<Products> {
   // In the productList() method around line 301, the error is with type assignment
 
   productList() async {
+    if (_isDisposed || !mounted) return;
+
     setState(() {
       isLoading = true; // Activar el indicador de carga
     });
 
-    offset++;
-    //check last sync, if difference is 10 minutes then sync again.
-    String? lastSync = await System().getProductLastSync();
-    final date2 = DateTime.now();
-    if (lastSync == null ||
-        (date2.difference(DateTime.parse(lastSync)).inMinutes > 10)) {
-      if (await Helper().checkConnectivity()) {
-        await Variations().refresh();
-        await System().insertProductLastSyncDateTimeNow();
-      }
-    }
-
-    findSellingPriceGroupId(selectedLocationId);
-    await Variations()
-        .get(
-        brandId: brandId,
-        categoryId: categoryId,
-        subCategoryId: subCategoryId,
-        inStock: inStock,
-        locationId: selectedLocationId,
-        searchTerm: searchController.text,
-        offset: offset,
-        byAlphabets: byAlphabets,
-        byPrice: byPrice)
-        .then((element) {
-      element.forEach((product) {
-        var price;
-        if (product['selling_price_group'] != null) {
-          jsonDecode(product['selling_price_group']).forEach((element) {
-            if (element['key'] == sellingPriceGroupId) {
-              price = double.parse(element['value'].toString());
-            }
-          });
+    try {
+      offset++;
+      //check last sync, if difference is 10 minutes then sync again.
+      String? lastSync = await System().getProductLastSync();
+      final date2 = DateTime.now();
+      if (lastSync == null ||
+          (date2.difference(DateTime.parse(lastSync)).inMinutes > 10)) {
+        if (await Helper().checkConnectivity()) {
+          await Variations().refresh();
+          await System().insertProductLastSyncDateTimeNow();
         }
-        setState(() {
-          products.add(ProductModel().product(product, price));
+      }
+
+      findSellingPriceGroupId(selectedLocationId);
+      await Variations()
+          .get(
+          brandId: brandId,
+          categoryId: categoryId,
+          subCategoryId: subCategoryId,
+          inStock: inStock,
+          locationId: selectedLocationId,
+          searchTerm: searchController.text,
+          offset: offset,
+          byAlphabets: byAlphabets,
+          byPrice: byPrice)
+          .then((element) {
+        element.forEach((product) {
+          var price;
+          if (product['selling_price_group'] != null) {
+            jsonDecode(product['selling_price_group']).forEach((element) {
+              if (element['key'] == sellingPriceGroupId) {
+                price = double.parse(element['value'].toString());
+              }
+            });
+          }
+          if (_isDisposed || !mounted) return;
+          setState(() {
+            products.add(ProductModel().product(product, price));
+          });
         });
       });
-    });
 
-    setState(() {
-      isLoading = false; // Desactivar el indicador de carga
-    });
+      if (_isDisposed || !mounted) return;
+      setState(() {
+        isLoading = false; // Desactivar el indicador de carga
+      });
+    } catch (e) {
+      print('Error loading products: $e');
+      if (_isDisposed || !mounted) return;
+      setState(() {
+        isLoading = false;
+      });
+    }
   }
 
   categoryList() async {
@@ -406,9 +420,11 @@ class _ProductsState extends State<Products> {
   Future<String> getCartItemCount({isCompleted, sellId}) async {
     var counts =
     await Sell().cartItemCount(isCompleted: isCompleted, sellId: sellId);
-    setState(() {
-      cartCount = int.parse(counts);
-    });
+    if (!_isDisposed && mounted) {
+      setState(() {
+        cartCount = int.parse(counts);
+      });
+    }
     return counts;
   }
 
@@ -466,7 +482,7 @@ class _ProductsState extends State<Products> {
             locations(),
             badges.Badge(
               badgeStyle: BadgeStyle(badgeColor: Colors.red),
-              position: BadgePosition.topStart(start: 5.0, top: 5.0),
+              position: badges.BadgePosition.topStart(start: 5.0, top: 5.0),
               badgeContent: FutureBuilder(
                   future: (argument != null && argument!['sellId'] != null)
                       ? getCartItemCount(sellId: argument!['sellId'])
@@ -1291,28 +1307,56 @@ class _ProductsState extends State<Products> {
 
   //onTap product
   onTapProduct(int index) async {
-    if (canAddSell) {
-      if (canMakeSell) {
-        if (products[index]['stock_available'] > 0) {
-          Fluttertoast.showToast(
-              msg: AppLocalizations.of(context).translate('added_to_cart'));
-          await Sell().addToCart(
-              products[index], argument != null ? argument!['sellId'] : null);
-          if (argument != null) {
-            selectedLocationId = argument!['locationId'];
-          }
-        } else {
-          Fluttertoast.showToast(
-              msg: "${AppLocalizations.of(context).translate("out_of_stock")}");
+    if (!canAddSell) {
+      Fluttertoast.showToast(
+          msg: AppLocalizations.of(context).translate('no_subscription_found'));
+      return;
+    }
+
+    if (!canMakeSell) {
+      Fluttertoast.showToast(
+          msg: AppLocalizations.of(context).translate('no_sells_permission'));
+      return;
+    }
+
+    // Check stock before attempting to add
+    if (products[index]['enable_stock'] != 0 && products[index]['stock_available'] <= 0) {
+      Fluttertoast.showToast(
+          msg: "${AppLocalizations.of(context).translate("out_of_stock")}");
+      return;
+    }
+
+    try {
+      bool added = await Sell().addToCart(
+          products[index],
+          argument != null ? argument!['sellId'] : null
+      );
+
+      if (added) {
+        Fluttertoast.showToast(
+            msg: AppLocalizations.of(context).translate('added_to_cart'));
+
+        // Update cart count
+        await getCartItemCount(
+            isCompleted: 0,
+            sellId: argument != null ? argument!['sellId'] : null
+        );
+
+        if (argument != null) {
+          selectedLocationId = argument!['locationId'];
         }
       } else {
         Fluttertoast.showToast(
-            msg:
-            "${AppLocalizations.of(context).translate("no_sells_permission")}");
+            msg: AppLocalizations.of(context).translate('item_already_in_cart'));
       }
-    } else {
-      Fluttertoast.showToast(
-          msg: AppLocalizations.of(context).translate('no_subscription_found'));
+    } catch (e) {
+      if (e.toString().contains('Insufficient stock')) {
+        Fluttertoast.showToast(
+            msg: "${AppLocalizations.of(context).translate("out_of_stock")}");
+      } else {
+        Fluttertoast.showToast(
+            msg: 'Error adding item to cart');
+      }
     }
   }
 
@@ -1333,7 +1377,7 @@ class _ProductsState extends State<Products> {
     });
   }
 
-  setDefaultLocation(defaultLocation) {
+  Future<void> setDefaultLocation(defaultLocation) async {
     if (defaultLocation != 0) {
       setState(() {
         selectedLocationId = defaultLocation;
@@ -1539,6 +1583,7 @@ class _ProductGridWidgetState extends State<_ProductGridWidget> {
               children: <Widget>[
                 Text(widget.name!,
                     overflow: TextOverflow.ellipsis,
+                    maxLines: 2,
                     style: AppTheme.getTextStyle(themeData.textTheme.subtitle2,
                         fontWeight: 500, letterSpacing: 0)),
                 Container(
@@ -1649,6 +1694,8 @@ class _ProductListWidgetState extends State<_ProductListWidget> {
               imageUrl: widget.image ?? ''),
         ),
         title: Text(widget.name!,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 2,
             style: AppTheme.getTextStyle(themeData.textTheme.subtitle2,
                 fontWeight: 500, letterSpacing: 0)),
         trailing: Column(

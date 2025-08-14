@@ -1,0 +1,34 @@
+
+======== Exception caught by widgets library =======================================================
+The following assertion was thrown building Sales(dirty, dependencies: [_InheritedTheme, _LocalizationsScope-[GlobalKey#c667d]], state: _SalesState#2af50(tickers: tracking 1 ticker)):
+There should be exactly one item with [DropdownButton]'s value: {id: 0, name: All}. 
+Either zero or 2 or more [DropdownMenuItem]s were detected with the same value
+'package:flutter/src/material/dropdown.dart':
+Failed assertion: line 948 pos 15: 'items == null || items.isEmpty || value == null ||
+              items.where((DropdownMenuItem<T> item) {
+                return item.value == value;
+              }).length == 1'
+
+The relevant error-causing widget was: 
+  Sales Sales:file:///C:/Users/fikri/Desktop/orbit/lib/helpers/bottomNav.dart:79:5
+When the exception was thrown, this was the stack: 
+#2      new DropdownButton (package:flutter/src/material/dropdown.dart:948:15)
+#3      _SalesState._buildLocationDropdown (package:pos_final/pages/sales.dart:992:16)
+#4      _SalesState._buildFilterContent (package:pos_final/pages/sales.dart:435:20)
+#5      _SalesState._buildFilterSection (package:pos_final/pages/sales.dart:419:33)
+#6      _SalesState._buildAllSalesTab (package:pos_final/pages/sales.dart:331:9)
+#7      _SalesState.build (package:pos_final/pages/sales.dart:197:13)
+#8      StatefulElement.build (package:flutter/src/widgets/framework.dart:5583:27)
+#9      ComponentElement.performRebuild (package:flutter/src/widgets/framework.dart:5471:15)
+#10     StatefulElement.performRebuild (package:flutter/src/widgets/framework.dart:5634:11)
+#11     Element.rebuild (package:flutter/src/widgets/framework.dart:5187:7)
+#12     BuildOwner.buildScope (package:flutter/src/widgets/framework.dart:2895:19)
+#13     WidgetsBinding.drawFrame (package:flutter/src/widgets/binding.dart:984:21)
+#14     RendererBinding._handlePersistentFrameCallback (package:flutter/src/rendering/binding.dart:457:5)
+#15     SchedulerBinding._invokeFrameCallback (package:flutter/src/scheduler/binding.dart:1325:15)
+#16     SchedulerBinding.handleDrawFrame (package:flutter/src/scheduler/binding.dart:1255:9)
+#17     SchedulerBinding._handleDrawFrame (package:flutter/src/scheduler/binding.dart:1113:5)
+#18     _invoke (dart:ui/hooks.dart:312:13)
+#19     PlatformDispatcher._drawFrame (dart:ui/platform_dispatcher.dart:383:5)
+#20     _drawFrame (dart:ui/hooks.dart:283:31)
+(elided 2 frames from class _AssertionError)

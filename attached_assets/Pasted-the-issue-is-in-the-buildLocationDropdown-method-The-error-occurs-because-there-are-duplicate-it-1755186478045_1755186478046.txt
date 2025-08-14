@@ -1,0 +1,27 @@
+the issue is in the _buildLocationDropdown() method. The error occurs because there are duplicate items in the dropdown with the same value {id: 0, name: All}.
+The problem is in the setLocations() method in the new version. You're creating a new list but the logic for preventing duplicates isn't working correctly, and there might be timing issues with the setState calls.
+Here's the fix for the setLocations() method:Fixed setLocations MethodCode setLocations() async {
+  if (!mounted) return;
+
+  try {
+    final locations = await System().get('location');
+    if (!mounted) return;
+
+    // Create a new list starting with the default "All" entry
+    final newLocationList = <Map<dynamic, dynamic>Also, you need to update the _buildLocationDropdown() method to add additional safety checks:Fixed Location Dropdown MethodCode Widget _buildLocationDropdown() {
+  // Ensure locationListMap is not empty
+  if (locationListMap.isEmpty) {
+    locationListMap = [{'id': 0, 'name': 'All'}];
+  }
+
+  // Ensure selectedLocation exists in locationListMap
+  bool selectedExists = locationThe key changes made:
+
+Proper duplicate prevention: Using a Set<dynamic> to track IDs and prevent duplicates from being added to the list.
+Single setState call: Instead of calling setState multiple times in the loop, we build the complete list first and then update the state once.
+Better error handling: Added try-catch block to handle any potential errors during the location fetching process.
+Validation and cleanup: The dropdown method now includes logic to remove duplicates if they somehow get into the list and ensures the selected value is always valid.
+Safety checks: Added checks to ensure locationListMap is never empty and selectedLocation is always valid.
+Mounted checks: Added proper mounted checks before each setState call to prevent calling setState on disposed widgets.
+
+These changes should resolve the dropdown error you're experiencing by ensuring there are no duplicate items in the dropdown and that the selected value always exists in the items list.

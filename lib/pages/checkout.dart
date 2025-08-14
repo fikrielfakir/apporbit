@@ -1,3 +1,4 @@
+
 import 'dart:async';
 import 'dart:convert';
 import 'package:date_time_picker/date_time_picker.dart';
@@ -31,13 +32,9 @@ class CheckOutState extends State<CheckOut> {
   double totalPaying = 0.0;
   String symbol = '',
       invoiceType = "Mobile",
-      transactionDate =
-      DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
+      transactionDate = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
   Map? argument;
-  List<Map> payments = [],
-      paymentAccounts = [
-        {'id': null, 'name': "None"}
-      ];
+  List<Map> payments = [], paymentAccounts = [{'id': null, 'name': "None"}];
   List<int> deletedPaymentId = [];
   late Map<String, dynamic> paymentLine;
   List sellDetail = [];
@@ -68,44 +65,56 @@ class CheckOutState extends State<CheckOut> {
   }
 
   Future<void> getLocation() async {
-    bool serviceEnabled;
-    LocationPermission permission;
+    try {
+      bool serviceEnabled;
+      LocationPermission permission;
 
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      return Future.error('Location services are disabled.');
-    }
-
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        return Future.error('Location permissions are denied');
+      serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        setState(() {
+          isLocationFetched = true; // Allow checkout without location
+        });
+        return;
       }
+
+      permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          setState(() {
+            isLocationFetched = true; // Allow checkout without location
+          });
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        setState(() {
+          isLocationFetched = true; // Allow checkout without location
+        });
+        return;
+      }
+
+      Position position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10));
+      setState(() {
+        longitude = position.longitude;
+        latitude = position.latitude;
+        isLocationFetched = true;
+      });
+
+      await saveLocationToDatabase(latitude, longitude);
+    } catch (e) {
+      print('Location error: $e');
+      setState(() {
+        isLocationFetched = true; // Allow checkout even if location fails
+      });
     }
-
-    if (permission == LocationPermission.deniedForever) {
-      return Future.error(
-          'Location permissions are permanently denied, we cannot request permissions.');
-    }
-
-    Position position = await Geolocator.getCurrentPosition();
-    setState(() {
-      longitude = position.longitude;
-      latitude = position.latitude;
-      isLocationFetched = true;
-    });
-
-    await saveLocationToDatabase(latitude, longitude);
-    await sendLocationToServer(latitude, longitude);
   }
 
   Future<void> saveLocationToDatabase(double? lat, double? lon) async {
     print('Location saved to database: Latitude: $lat, Longitude: $lon');
-  }
-
-  Future<void> sendLocationToServer(double? lat, double? lon) async {
-    print('Location sent to server: Latitude: $lat, Longitude: $lon');
   }
 
   getInitDetails() async {
@@ -118,49 +127,55 @@ class CheckOutState extends State<CheckOut> {
   }
 
   setPaymentAccounts() async {
-    List payments =
-    await System().get('payment_method', argument!['locationId']);
-    await System().getPaymentAccounts().then((value) {
-      value.forEach((element) {
-        List<String> accIds = [];
-        payments.forEach((paymentMethod) {
-          if ((paymentMethod['account_id'].toString() ==
-              element['id'].toString()) &&
-              !accIds.contains(element['id'].toString())) {
-            setState(() {
-              paymentAccounts
-                  .add({'id': element['id'], 'name': element['name']});
-            });
+    try {
+      List payments = await System().get('payment_method', argument!['locationId']);
+      await System().getPaymentAccounts().then((value) {
+        for (var element in value) {
+          List<String> accIds = [];
+          for (var paymentMethod in payments) {
+            if ((paymentMethod['account_id'].toString() == element['id'].toString()) &&
+                !accIds.contains(element['id'].toString())) {
+              setState(() {
+                paymentAccounts.add({'id': element['id'], 'name': element['name']});
+              });
+              accIds.add(element['id'].toString());
+            }
           }
-        });
+        }
       });
-    });
+    } catch (e) {
+      print('Error setting payment accounts: $e');
+    }
   }
 
   @override
   void didChangeDependencies() {
     argument = ModalRoute.of(context)!.settings.arguments as Map?;
-    invoiceAmount = argument!['invoiceAmount'];
-    setPaymentAccounts().then((value) {
-      if (argument!['sellId'] == null) {
-        setPaymentDetails().then((value) {
-          payments.add({
-            'amount': invoiceAmount,
-            'method': paymentMethods[0]['name'],
-            'note': '',
-            'account_id': paymentMethods[0]['account_id']
+    if (argument != null) {
+      invoiceAmount = argument!['invoiceAmount'] ?? 0.0;
+      setPaymentAccounts().then((value) {
+        if (argument!['sellId'] == null) {
+          setPaymentDetails().then((value) {
+            if (paymentMethods.isNotEmpty) {
+              payments.add({
+                'amount': invoiceAmount,
+                'method': paymentMethods[0]['name'],
+                'note': '',
+                'account_id': paymentMethods[0]['account_id']
+              });
+              calculateMultiPayment();
+            }
           });
-          calculateMultiPayment();
-        });
-      } else {
-        setPaymentDetails().then((value) {
-          onEdit(argument!['sellId']);
-        });
-      }
-    });
-    setState(() {
-      isLoading = false;
-    });
+        } else {
+          setPaymentDetails().then((value) {
+            onEdit(argument!['sellId']);
+          });
+        }
+      });
+      setState(() {
+        isLoading = false;
+      });
+    }
     super.didChangeDependencies();
   }
 
@@ -169,36 +184,46 @@ class CheckOutState extends State<CheckOut> {
     staffNote.dispose();
     saleNote.dispose();
     returnAmountController.dispose();
+    shippingDetails.dispose();
+    shippingCharges.dispose();
+    dateController.dispose();
     super.dispose();
   }
 
   onEdit(sellId) async {
-    sellDetail = await SellDatabase().getSellBySellId(sellId);
-    this.sellId = argument!['sellId'];
-    await SellDatabase().getSellBySellId(sellId).then((value) {
-      shippingCharges.text = value[0]['shipping_charges'].toString();
-      shippingDetails.text = value[0]['shipping_details'] ?? '';
-      saleNote.text = value[0]['sale_note'] ?? '';
-      staffNote.text = value[0]['staff_note'] ?? '';
-      returnAmountController.text = value[0]['return_amount'].toString();
-      invoiceAmount =0;
-    });
-    payments = [];
-    List paymentLines = await PaymentDatabase().get(sellId, allColumns: true);
-    paymentLines.forEach((element) {
-      if (element['is_return'] == 0) {
-        payments.add({
-          'id': element['id'],
-          'amount': element['amount'],
-          'method': element['method'],
-          'note': element['note'],
-          'account_id': element['account_id']
-        });
+    try {
+      sellDetail = await SellDatabase().getSellBySellId(sellId);
+      this.sellId = argument!['sellId'];
+      
+      if (sellDetail.isNotEmpty) {
+        var sellData = sellDetail[0];
+        shippingCharges.text = sellData['shipping_charges']?.toString() ?? '0';
+        shippingDetails.text = sellData['shipping_details'] ?? '';
+        saleNote.text = sellData['sale_note'] ?? '';
+        staffNote.text = sellData['staff_note'] ?? '';
+        returnAmountController.text = sellData['return_amount']?.toString() ?? '0';
+        returnAmount = double.tryParse(sellData['return_amount']?.toString() ?? '0') ?? 0.0;
       }
-    });
-    calculateMultiPayment();
-    if (this.mounted) {
-      setState(() {});
+      
+      payments = [];
+      List paymentLines = await PaymentDatabase().get(sellId, allColumns: true);
+      for (var element in paymentLines) {
+        if (element['is_return'] == 0) {
+          payments.add({
+            'id': element['id'],
+            'amount': double.tryParse(element['amount'].toString()) ?? 0.0,
+            'method': element['method'],
+            'note': element['note'] ?? '',
+            'account_id': element['account_id']
+          });
+        }
+      }
+      calculateMultiPayment();
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      print('Error in onEdit: $e');
     }
   }
 
@@ -215,18 +240,33 @@ class CheckOutState extends State<CheckOut> {
           child: (isLoading)
               ? Helper().loadingIndicator(context)
               : Column(
-            children: [
-              if (latitude != null && longitude != null)
-                Padding(
-                  padding: EdgeInsets.all(MySize.size16!),
-                  child: Text(
-                    'Latitude: $latitude, Longitude: $longitude',
-                    style: TextStyle(fontSize: 16),
-                  ),
+                  children: [
+                    if (latitude != null && longitude != null)
+                      Padding(
+                        padding: EdgeInsets.all(MySize.size16!),
+                        child: Container(
+                          padding: EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.location_on, color: Colors.green, size: 16),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Location: ${latitude!.toStringAsFixed(4)}, ${longitude!.toStringAsFixed(4)}',
+                                  style: TextStyle(fontSize: 12, color: Colors.green[700]),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    paymentBox(),
+                  ],
                 ),
-              paymentBox(),
-            ],
-          ),
         ));
   }
 
@@ -245,8 +285,7 @@ class CheckOutState extends State<CheckOut> {
               type: DateTimePickerType.dateTime,
               firstDate: DateTime.now().subtract(Duration(days: 366)),
               lastDate: DateTime.now(),
-              dateLabelText:
-              "${AppLocalizations.of(context).translate('date')}:",
+              dateLabelText: "${AppLocalizations.of(context).translate('date')}:",
               style: AppTheme.getTextStyle(
                 themeData.textTheme.bodyText1,
                 fontWeight: 700,
@@ -278,9 +317,7 @@ class CheckOutState extends State<CheckOut> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
                               Text(
-                                  AppLocalizations.of(context)
-                                      .translate('amount') +
-                                      ' : ',
+                                  AppLocalizations.of(context).translate('amount') + ' : ',
                                   style: AppTheme.getTextStyle(
                                       themeData.textTheme.bodyText1,
                                       color: themeData.colorScheme.onBackground,
@@ -294,8 +331,7 @@ class CheckOutState extends State<CheckOut> {
                                         suffix: Text(symbol),
                                       ),
                                       textAlign: TextAlign.center,
-                                      initialValue: payments[index]['amount']
-                                          .toStringAsFixed(2),
+                                      initialValue: payments[index]['amount'].toStringAsFixed(2),
                                       inputFormatters: [
                                         FilteringTextInputFormatter(
                                             RegExp(r'^(\d+)?\.?\d{0,2}'),
@@ -303,8 +339,7 @@ class CheckOutState extends State<CheckOut> {
                                       ],
                                       keyboardType: TextInputType.number,
                                       onChanged: (value) {
-                                        payments[index]['amount'] =
-                                            Helper().validateInput(value);
+                                        payments[index]['amount'] = Helper().validateInput(value);
                                         calculateMultiPayment();
                                       }))
                             ],
@@ -320,9 +355,7 @@ class CheckOutState extends State<CheckOut> {
                           Column(
                             children: <Widget>[
                               Text(
-                                  AppLocalizations.of(context)
-                                      .translate('payment_method') +
-                                      ' : ',
+                                  AppLocalizations.of(context).translate('payment_method') + ' : ',
                                   style: AppTheme.getTextStyle(
                                       themeData.textTheme.bodyText1,
                                       color: themeData.colorScheme.onBackground,
@@ -331,40 +364,33 @@ class CheckOutState extends State<CheckOut> {
                               DropdownButtonHideUnderline(
                                 child: DropdownButton(
                                     dropdownColor: Colors.white,
-                                    icon: Icon(
-                                      Icons.arrow_drop_down,
-                                    ),
+                                    icon: Icon(Icons.arrow_drop_down),
                                     value: payments[index]['method'],
-                                    items: paymentMethods
-                                        .map<DropdownMenuItem<String>>(
-                                            (Map value) {
-                                          return DropdownMenuItem<String>(
-                                            value: value['name'],
-                                            child: Container(
-                                              width: MySize.screenWidth! * 0.35,
-                                              child: Text(value['value'],
-                                                  softWrap: true,
-                                                  overflow: TextOverflow.ellipsis,
-                                                  style: AppTheme.getTextStyle(
-                                                      themeData.textTheme.bodyText1,
-                                                      color: themeData
-                                                          .colorScheme.onBackground,
-                                                      fontWeight: 800,
-                                                      muted: true)),
-                                            ),
-                                          );
-                                        }).toList(),
+                                    items: paymentMethods.map<DropdownMenuItem<String>>((Map value) {
+                                      return DropdownMenuItem<String>(
+                                        value: value['name'],
+                                        child: Container(
+                                          width: MySize.screenWidth! * 0.35,
+                                          child: Text(value['value'],
+                                              softWrap: true,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: AppTheme.getTextStyle(
+                                                  themeData.textTheme.bodyText1,
+                                                  color: themeData.colorScheme.onBackground,
+                                                  fontWeight: 800,
+                                                  muted: true)),
+                                        ),
+                                      );
+                                    }).toList(),
                                     onChanged: (newValue) {
-                                      paymentMethods.forEach((element) {
+                                      for (var element in paymentMethods) {
                                         if (element['name'] == newValue) {
                                           setState(() {
-                                            payments[index]['method'] =
-                                                newValue;
-                                            payments[index]['account_id'] =
-                                            element['account_id'];
+                                            payments[index]['method'] = newValue;
+                                            payments[index]['account_id'] = element['account_id'];
                                           });
                                         }
-                                      });
+                                      }
                                     }),
                               )
                             ],
@@ -372,9 +398,7 @@ class CheckOutState extends State<CheckOut> {
                           Column(
                             children: <Widget>[
                               Text(
-                                  AppLocalizations.of(context)
-                                      .translate('payment_account') +
-                                      ' : ',
+                                  AppLocalizations.of(context).translate('payment_account') + ' : ',
                                   style: AppTheme.getTextStyle(
                                       themeData.textTheme.bodyText1,
                                       color: themeData.colorScheme.onBackground,
@@ -383,33 +407,27 @@ class CheckOutState extends State<CheckOut> {
                               DropdownButtonHideUnderline(
                                 child: DropdownButton(
                                     dropdownColor: Colors.white,
-                                    icon: Icon(
-                                      Icons.arrow_drop_down,
-                                    ),
+                                    icon: Icon(Icons.arrow_drop_down),
                                     value: payments[index]['account_id'],
-                                    items: paymentAccounts
-                                        .map<DropdownMenuItem<int>>(
-                                            (Map value) {
-                                          return DropdownMenuItem<int>(
-                                            value: value['id'],
-                                            child: Container(
-                                              width: MySize.screenWidth! * 0.35,
-                                              child: Text(value['name'],
-                                                  softWrap: true,
-                                                  overflow: TextOverflow.ellipsis,
-                                                  style: AppTheme.getTextStyle(
-                                                      themeData.textTheme.bodyText1,
-                                                      color: themeData
-                                                          .colorScheme.onBackground,
-                                                      fontWeight: 800,
-                                                      muted: true)),
-                                            ),
-                                          );
-                                        }).toList(),
+                                    items: paymentAccounts.map<DropdownMenuItem<int>>((Map value) {
+                                      return DropdownMenuItem<int>(
+                                        value: value['id'],
+                                        child: Container(
+                                          width: MySize.screenWidth! * 0.35,
+                                          child: Text(value['name'],
+                                              softWrap: true,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: AppTheme.getTextStyle(
+                                                  themeData.textTheme.bodyText1,
+                                                  color: themeData.colorScheme.onBackground,
+                                                  fontWeight: 800,
+                                                  muted: true)),
+                                        ),
+                                      );
+                                    }).toList(),
                                     onChanged: (newValue) {
                                       setState(() {
-                                        payments[index]['account_id'] =
-                                            newValue;
+                                        payments[index]['account_id'] = newValue;
                                       });
                                     }),
                               )
@@ -422,9 +440,10 @@ class CheckOutState extends State<CheckOut> {
                           SizedBox(
                             width: MySize.safeWidth! * 0.8,
                             child: TextFormField(
+                                initialValue: payments[index]['note'],
                                 decoration: InputDecoration(
-                                    hintText: AppLocalizations.of(context)
-                                        .translate('payment_note')),
+                                    hintText:
+                                        AppLocalizations.of(context).translate('payment_note')),
                                 onChanged: (value) {
                                   payments[index]['note'] = value;
                                 }),
@@ -432,14 +451,14 @@ class CheckOutState extends State<CheckOut> {
                           Expanded(
                               child: (index > 0)
                                   ? IconButton(
-                                  icon: Icon(
-                                    MdiIcons.deleteForeverOutline,
-                                    size: MySize.size40,
-                                    color: Colors.black,
-                                  ),
-                                  onPressed: () {
-                                    alertConfirm(context, index);
-                                  })
+                                      icon: Icon(
+                                        MdiIcons.deleteForeverOutline,
+                                        size: MySize.size40,
+                                        color: Colors.red,
+                                      ),
+                                      onPressed: () {
+                                        alertConfirm(context, index);
+                                      })
                                   : Container())
                         ],
                       ),
@@ -455,20 +474,20 @@ class CheckOutState extends State<CheckOut> {
                 children: <Widget>[
                   OutlinedButton(
                     style: OutlinedButton.styleFrom(
-                      side: BorderSide(
-                        color: themeData.colorScheme.primary,
-                      ),
+                      side: BorderSide(color: themeData.colorScheme.primary),
                     ),
                     onPressed: () {
-                      setState(() {
-                        payments.add({
-                          'amount': pendingAmount,
-                          'method': paymentMethods[0]['name'],
-                          'note': '',
-                          'account_id': paymentMethods[0]['account_id'],
+                      if (paymentMethods.isNotEmpty) {
+                        setState(() {
+                          payments.add({
+                            'amount': pendingAmount,
+                            'method': paymentMethods[0]['name'],
+                            'note': '',
+                            'account_id': paymentMethods[0]['account_id'],
+                          });
+                          calculateMultiPayment();
                         });
-                        calculateMultiPayment();
-                      });
+                      }
                     },
                     child: Text(
                       AppLocalizations.of(context).translate('add_payment'),
@@ -481,86 +500,73 @@ class CheckOutState extends State<CheckOut> {
                   ),
                   Row(
                     children: [
-                      Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                                AppLocalizations.of(context)
-                                    .translate('shipping_charges') +
-                                    ' : ',
-                                style: AppTheme.getTextStyle(
-                                    themeData.textTheme.bodyText1,
-                                    color: themeData.colorScheme.onBackground,
-                                    fontWeight: 600,
-                                    muted: true)),
-                            SizedBox(
-                                height: MySize.size40,
-                                width: MySize.safeWidth! * 0.5,
-                                child: TextFormField(
-                                    controller: shippingCharges,
-                                    decoration: InputDecoration(
-                                      suffix: Text(symbol),
-                                    ),
-                                    textAlign: TextAlign.center,
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter(
-                                          RegExp(r'^(\d+)?\.?\d{0,2}'),
-                                          allow: true)
-                                    ],
-                                    keyboardType: TextInputType.number,
-                                    onChanged: (value) {
-                                      invoiceAmount =
-                                          argument!['invoiceAmount'] +
-                                              Helper().validateInput(value);
-                                      calculateMultiPayment();
-                                    })),
-                            Padding(padding: EdgeInsets.symmetric(vertical: 5)),
-                            SizedBox(
-                              width: MySize.safeWidth! * 0.8,
-                              child: TextFormField(
-                                  controller: shippingDetails,
-                                  decoration: InputDecoration(
-                                      hintText: AppLocalizations.of(context)
-                                          .translate('shipping_details')),
-                                  onChanged: (value) async {}),
-                            ),
-                          ]),
+                      Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+                        Text(
+                            AppLocalizations.of(context).translate('shipping_charges') + ' : ',
+                            style: AppTheme.getTextStyle(
+                                themeData.textTheme.bodyText1,
+                                color: themeData.colorScheme.onBackground,
+                                fontWeight: 600,
+                                muted: true)),
+                        SizedBox(
+                            height: MySize.size40,
+                            width: MySize.safeWidth! * 0.5,
+                            child: TextFormField(
+                                controller: shippingCharges,
+                                decoration: InputDecoration(suffix: Text(symbol)),
+                                textAlign: TextAlign.center,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter(
+                                      RegExp(r'^(\d+)?\.?\d{0,2}'),
+                                      allow: true)
+                                ],
+                                keyboardType: TextInputType.number,
+                                onChanged: (value) {
+                                  double shippingAmount = Helper().validateInput(value);
+                                  invoiceAmount = (argument!['invoiceAmount'] ?? 0.0) + shippingAmount;
+                                  calculateMultiPayment();
+                                })),
+                        Padding(padding: EdgeInsets.symmetric(vertical: 5)),
+                        SizedBox(
+                          width: MySize.safeWidth! * 0.8,
+                          child: TextFormField(
+                              controller: shippingDetails,
+                              decoration: InputDecoration(
+                                  hintText: AppLocalizations.of(context)
+                                      .translate('shipping_details')),
+                              onChanged: (value) async {}),
+                        ),
+                      ]),
                     ],
                   ),
                   Row(
                     children: [
-                      Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                                AppLocalizations.of(context)
-                                    .translate('return_amount') +
-                                    ' : ',
-                                style: AppTheme.getTextStyle(
-                                    themeData.textTheme.bodyText1,
-                                    color: themeData.colorScheme.onBackground,
-                                    fontWeight: 600,
-                                    muted: true)),
-                            SizedBox(
-                                height: MySize.size40,
-                                width: MySize.safeWidth! * 0.5,
-                                child: TextFormField(
-                                    controller: returnAmountController,
-                                    decoration: InputDecoration(
-                                      suffix: Text(symbol),
-                                    ),
-                                    textAlign: TextAlign.center,
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter(
-                                          RegExp(r'^(\d+)?\.?\d{0,2}'),
-                                          allow: true)
-                                    ],
-                                    keyboardType: TextInputType.number,
-                                    onChanged: (value) {
-                                      returnAmount = Helper().validateInput(value);
-                                      calculateMultiPayment();
-                                    })),
-                          ]),
+                      Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+                        Text(
+                            AppLocalizations.of(context).translate('return_amount') + ' : ',
+                            style: AppTheme.getTextStyle(
+                                themeData.textTheme.bodyText1,
+                                color: themeData.colorScheme.onBackground,
+                                fontWeight: 600,
+                                muted: true)),
+                        SizedBox(
+                            height: MySize.size40,
+                            width: MySize.safeWidth! * 0.5,
+                            child: TextFormField(
+                                controller: returnAmountController,
+                                decoration: InputDecoration(suffix: Text(symbol)),
+                                textAlign: TextAlign.center,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter(
+                                      RegExp(r'^(\d+)?\.?\d{0,2}'),
+                                      allow: true)
+                                ],
+                                keyboardType: TextInputType.number,
+                                onChanged: (value) {
+                                  returnAmount = Helper().validateInput(value);
+                                  calculateMultiPayment();
+                                })),
+                      ]),
                     ],
                   ),
                   Container(
@@ -577,26 +583,20 @@ class CheckOutState extends State<CheckOut> {
                         crossAxisSpacing: MySize.size16!,
                         children: <Widget>[
                           block(
-                            amount: Helper().formatCurrency(invoiceAmount  - returnAmount),
-                            subject: AppLocalizations.of(context)
-                                .translate('total_payble') +
-                                ' : ',
+                            amount: Helper().formatCurrency(invoiceAmount - returnAmount),
+                            subject: AppLocalizations.of(context).translate('total_payble') + ' : ',
                             backgroundColor: Colors.blue,
                             textColor: themeData.colorScheme.onBackground,
                           ),
                           block(
                             amount: Helper().formatCurrency(totalPaying),
-                            subject: AppLocalizations.of(context)
-                                .translate('total_paying') +
-                                ' : ',
+                            subject: AppLocalizations.of(context).translate('total_paying') + ' : ',
                             backgroundColor: Colors.red,
                             textColor: themeData.colorScheme.onBackground,
                           ),
                           block(
                             amount: Helper().formatCurrency(changeReturn),
-                            subject: AppLocalizations.of(context)
-                                .translate('change_return') +
-                                ' : ',
+                            subject: AppLocalizations.of(context).translate('change_return') + ' : ',
                             backgroundColor: Colors.green,
                             textColor: (changeReturn >= 0.01)
                                 ? Colors.red
@@ -604,18 +604,15 @@ class CheckOutState extends State<CheckOut> {
                           ),
                           block(
                             amount: Helper().formatCurrency(pendingAmount),
-                            subject: AppLocalizations.of(context)
-                                .translate('balance') +
-                                ' : ',
+                            subject: AppLocalizations.of(context).translate('balance') + ' : ',
                             backgroundColor: Colors.orange,
                             textColor: (pendingAmount >= 0.01)
                                 ? Colors.red
                                 : themeData.colorScheme.onBackground,
-                          ),block(
-                            amount: (returnAmount),
-                            subject: AppLocalizations.of(context)
-                                .translate('return_amount') +
-                                ' : ',
+                          ),
+                          block(
+                            amount: Helper().formatCurrency(returnAmount),
+                            subject: AppLocalizations.of(context).translate('return_amount') + ' : ',
                             backgroundColor: Colors.orange,
                             textColor: (returnAmount >= 0.01)
                                 ? Colors.lightGreen
@@ -632,9 +629,7 @@ class CheckOutState extends State<CheckOut> {
                           children: <Widget>[
                             Column(children: <Widget>[
                               Text(
-                                  AppLocalizations.of(context)
-                                      .translate('sell_note') +
-                                      ' : ',
+                                  AppLocalizations.of(context).translate('sell_note') + ' : ',
                                   style: AppTheme.getTextStyle(
                                       themeData.textTheme.bodyText1,
                                       color: themeData.colorScheme.onBackground,
@@ -643,28 +638,21 @@ class CheckOutState extends State<CheckOut> {
                               SizedBox(
                                   height: MySize.size80,
                                   width: MySize.screenWidth! * 0.40,
-                                  child: TextFormField(
-                                    controller: saleNote,
-                                  ))
+                                  child: TextFormField(controller: saleNote))
                             ]),
                             Column(
                               children: <Widget>[
                                 Text(
-                                    AppLocalizations.of(context)
-                                        .translate('staff_note') +
-                                        ' : ',
+                                    AppLocalizations.of(context).translate('staff_note') + ' : ',
                                     style: AppTheme.getTextStyle(
                                         themeData.textTheme.bodyText1,
-                                        color:
-                                        themeData.colorScheme.onBackground,
+                                        color: themeData.colorScheme.onBackground,
                                         fontWeight: 600,
                                         muted: true)),
                                 SizedBox(
                                   height: MySize.size80,
                                   width: MySize.screenWidth! * 0.40,
-                                  child: TextFormField(
-                                    controller: staffNote,
-                                  ),
+                                  child: TextFormField(controller: staffNote),
                                 ),
                               ],
                             ),
@@ -691,13 +679,11 @@ class CheckOutState extends State<CheckOut> {
                                     ),
                                     Expanded(
                                       child: Text(
-                                        AppLocalizations.of(context)
-                                            .translate('mobile_layout'),
+                                        AppLocalizations.of(context).translate('mobile_layout'),
                                         maxLines: 2,
                                         style: AppTheme.getTextStyle(
                                             themeData.textTheme.bodyText2,
-                                            color: themeData
-                                                .colorScheme.onBackground,
+                                            color: themeData.colorScheme.onBackground,
                                             fontWeight: 600),
                                       ),
                                     ),
@@ -712,8 +698,7 @@ class CheckOutState extends State<CheckOut> {
                                       value: "Web",
                                       groupValue: invoiceType,
                                       onChanged: (value) async {
-                                        if (await Helper()
-                                            .checkConnectivity()) {
+                                        if (await Helper().checkConnectivity()) {
                                           setState(() {
                                             invoiceType = value.toString();
                                             printWebInvoice = true;
@@ -721,21 +706,18 @@ class CheckOutState extends State<CheckOut> {
                                         } else {
                                           Fluttertoast.showToast(
                                               msg: AppLocalizations.of(context)
-                                                  .translate(
-                                                  'check_connectivity'));
+                                                  .translate('check_connectivity'));
                                         }
                                       },
                                       toggleable: true,
                                     ),
                                     Expanded(
                                       child: Text(
-                                        AppLocalizations.of(context)
-                                            .translate('web_layout'),
+                                        AppLocalizations.of(context).translate('web_layout'),
                                         maxLines: 2,
                                         style: AppTheme.getTextStyle(
                                             themeData.textTheme.bodyText2,
-                                            color: themeData
-                                                .colorScheme.onBackground,
+                                            color: themeData.colorScheme.onBackground,
                                             fontWeight: 600),
                                       ),
                                     ),
@@ -754,8 +736,7 @@ class CheckOutState extends State<CheckOut> {
                                 visible: isLocationFetched,
                                 child: ElevatedButton(
                                   style: ElevatedButton.styleFrom(
-                                      primary: themeData.colorScheme.onPrimary,
-                                      elevation: 5),
+                                      primary: themeData.colorScheme.onPrimary, elevation: 5),
                                   onPressed: () {
                                     _printInvoice = false;
                                     if (pendingAmount >= 0.01) {
@@ -767,8 +748,7 @@ class CheckOutState extends State<CheckOut> {
                                     }
                                   },
                                   child: Text(
-                                    AppLocalizations.of(context)
-                                        .translate('finalize_n_share'),
+                                    AppLocalizations.of(context).translate('finalize_n_share'),
                                     style: AppTheme.getTextStyle(
                                       themeData.textTheme.subtitle1,
                                       fontWeight: 700,
@@ -779,8 +759,7 @@ class CheckOutState extends State<CheckOut> {
                               ),
                             ),
                             Padding(
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: MySize.size10!),
+                              padding: EdgeInsets.symmetric(horizontal: MySize.size10!),
                             ),
                             Expanded(
                               flex: 1,
@@ -788,8 +767,7 @@ class CheckOutState extends State<CheckOut> {
                                 visible: isLocationFetched,
                                 child: ElevatedButton(
                                   style: ElevatedButton.styleFrom(
-                                      primary: themeData.colorScheme.primary,
-                                      elevation: 5),
+                                      primary: themeData.colorScheme.primary, elevation: 5),
                                   onPressed: () {
                                     _printInvoice = true;
                                     if (pendingAmount >= 0.01) {
@@ -801,8 +779,7 @@ class CheckOutState extends State<CheckOut> {
                                     }
                                   },
                                   child: Text(
-                                    AppLocalizations.of(context)
-                                        .translate('finalize_n_print'),
+                                    AppLocalizations.of(context).translate('finalize_n_print'),
                                     style: AppTheme.getTextStyle(
                                       themeData.textTheme.subtitle1,
                                       fontWeight: 700,
@@ -863,12 +840,16 @@ class CheckOutState extends State<CheckOut> {
 
   calculateMultiPayment() {
     totalPaying = 0.0;
-    payments.forEach((element) {
-      totalPaying += element['amount'] ;
-    });
+    for (var element in payments) {
+      totalPaying += double.tryParse(element['amount'].toString()) ?? 0.0;
+    }
 
+    // Get return amount from controller
     returnAmount = double.tryParse(returnAmountController.text) ?? 0.0;
-    double adjustedInvoiceAmount = invoiceAmount;
+    
+    // Adjust invoice amount with shipping and return amount
+    double shippingAmount = double.tryParse(shippingCharges.text) ?? 0.0;
+    double adjustedInvoiceAmount = (argument!['invoiceAmount'] ?? 0.0) + shippingAmount - returnAmount;
 
     if (totalPaying > adjustedInvoiceAmount) {
       changeReturn = totalPaying - adjustedInvoiceAmount;
@@ -881,27 +862,33 @@ class CheckOutState extends State<CheckOut> {
       changeReturn = 0.0;
     }
 
-    if (this.mounted) {
+    // Update invoice amount for display
+    invoiceAmount = adjustedInvoiceAmount;
+
+    if (mounted) {
       setState(() {});
     }
   }
 
   setPaymentDetails() async {
-    List payments =
-    await System().get('payment_method', argument!['locationId']);
-    payments.forEach((element) {
-      if (this.mounted) {
-        setState(() {
-          paymentMethods.add({
-            'name': element['name'],
-            'value': element['label'],
-            'account_id': (element['account_id'] != null)
-                ? int.parse(element['account_id'].toString())
-                : null
+    try {
+      List payments = await System().get('payment_method', argument!['locationId']);
+      for (var element in payments) {
+        if (this.mounted) {
+          setState(() {
+            paymentMethods.add({
+              'name': element['name'],
+              'value': element['label'],
+              'account_id': (element['account_id'] != null)
+                  ? int.parse(element['account_id'].toString())
+                  : null
+            });
           });
-        });
+        }
       }
-    });
+    } catch (e) {
+      print('Error setting payment details: $e');
+    }
   }
 
   onSubmit() async {
@@ -910,104 +897,119 @@ class CheckOutState extends State<CheckOut> {
       saleCreated = true;
     });
 
-    returnAmount = double.tryParse(returnAmountController.text) ?? 0.0;
+    try {
+      // Validate inputs
+      if (payments.isEmpty) {
+        throw Exception('At least one payment method is required');
+      }
 
-    Map<String, dynamic> sell = await Sell().createSell(
-        invoiceNo: Config.userId.toString() +
-            "_" +
-            DateFormat('yMdHm').format(DateTime.now()),
-        transactionDate: transactionDate,
-        changeReturn: changeReturn,
-        contactId: argument!['customerId'],
-        discountAmount: argument!['discountAmount'],
-        discountType: argument!['discountType'],
-        invoiceAmount: invoiceAmount,
-        locId: argument!['locationId'],
-        pending: pendingAmount,
-        saleNote: saleNote.text,
-        saleStatus: 'final',
-        sellId: sellId,
-        latiTude: latitude,
-        longiTude: longitude,
-        shippingCharges: (shippingCharges.text != '')
-            ? double.parse(shippingCharges.text)
-            : 0.00,
-        shippingDetails: shippingDetails.text,
-        staffNote: staffNote.text,
-        taxId: argument!['taxId'],
-        isQuotation: 0,
-        returnAmount: returnAmount
-    );
+      // Get return amount from controller
+      returnAmount = double.tryParse(returnAmountController.text) ?? 0.0;
 
-    var response;
-    if (sellId != null) {
-      response = sellId;
-      await SellDatabase().updateSells(sellId, sell).then((value) async {
-        payments.forEach((element) {
-          if (element['id'] != null) {
-            paymentLine = {
-              'amount': element['amount'],
-              'method': element['method'],
-              'note': element['note'],
-              'account_id': element['account_id']
-            };
-            PaymentDatabase()
-                .updateEditedPaymentLine(element['id'], paymentLine);
+      Map<String, dynamic> sell = await Sell().createSell(
+          invoiceNo: Config.userId.toString() + "_" + DateFormat('yMdHm').format(DateTime.now()),
+          transactionDate: transactionDate,
+          changeReturn: changeReturn,
+          contactId: argument!['customerId'],
+          discountAmount: argument!['discountAmount'] ?? 0.0,
+          discountType: argument!['discountType'] ?? 'fixed',
+          invoiceAmount: invoiceAmount,
+          locId: argument!['locationId'],
+          pending: pendingAmount,
+          saleNote: saleNote.text,
+          saleStatus: 'final',
+          sellId: sellId,
+          latiTude: latitude,
+          longiTude: longitude,
+          shippingCharges: double.tryParse(shippingCharges.text) ?? 0.0,
+          shippingDetails: shippingDetails.text,
+          staffNote: staffNote.text,
+          taxId: argument!['taxId'],
+          isQuotation: 0,
+          returnAmount: returnAmount);
+
+      var response;
+      if (sellId != null) {
+        response = sellId;
+        await SellDatabase().updateSells(sellId, sell).then((value) async {
+          for (var element in payments) {
+            if (element['id'] != null) {
+              paymentLine = {
+                'amount': double.tryParse(element['amount'].toString()) ?? 0.0,
+                'method': element['method'],
+                'note': element['note'] ?? '',
+                'account_id': element['account_id']
+              };
+              PaymentDatabase().updateEditedPaymentLine(element['id'], paymentLine);
+            } else {
+              paymentLine = {
+                'sell_id': sellId,
+                'method': element['method'],
+                'amount': double.tryParse(element['amount'].toString()) ?? 0.0,
+                'note': element['note'] ?? '',
+                'account_id': element['account_id']
+              };
+              PaymentDatabase().store(paymentLine);
+            }
+          }
+          if (deletedPaymentId.isNotEmpty) {
+            PaymentDatabase().deletePaymentLineByIds(deletedPaymentId);
+          }
+          if (await Helper().checkConnectivity()) {
+            await Sell().createApiSell(sellId: sellId).then((value) => printOption(response));
           } else {
-            paymentLine = {
-              'sell_id': sellId,
-              'method': element['method'],
-              'amount': element['amount'],
-              'note': element['note'],
-              'account_id': element['account_id']
-            };
-            PaymentDatabase().store(paymentLine);
+            printOption(response);
           }
         });
-        if (deletedPaymentId.length > 0) {
-          PaymentDatabase().deletePaymentLineByIds(deletedPaymentId);
-        }
+      } else {
+        response = await SellDatabase().storeSell(sell);
+        Sell().makePayment(payments, response);
+        SellDatabase().updateSellLine({'sell_id': response, 'is_completed': 1});
         if (await Helper().checkConnectivity()) {
-          await Sell()
-              .createApiSell(sellId: sellId)
-              .then((value) => printOption(response));
-        } else {
-          printOption(response);
+          await Sell().createApiSell(sellId: response);
         }
-      });
-    } else {
-      response = await SellDatabase().storeSell(sell);
-      Sell().makePayment(payments, response);
-      SellDatabase().updateSellLine({'sell_id': response, 'is_completed': 1});
-      if (await Helper().checkConnectivity()) {
-        await Sell().createApiSell(sellId: response);
+        printOption(response);
       }
-      printOption(response);
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+        saleCreated = false;
+      });
+      Fluttertoast.showToast(msg: 'Error: ${e.toString()}');
     }
   }
 
   printOption(sellId) async {
     Timer(Duration(seconds: 2), () async {
-      List sellDetail = await SellDatabase().getSellBySellId(sellId);
-      String? invoice = sellDetail[0]['invoice_url'];
-      String invoiceNo = sellDetail[0]['invoice_no'];
-      if (_printInvoice) {
-        if (printWebInvoice && invoice != null) {
-          final response = await http.Client().get(Uri.parse(invoice));
-          if (response.statusCode == 200) {
-            await Helper()
-                .printDocument(sellId, argument!['taxId'], context,
-                invoice: response.body)
-                .then((value) {
-              Navigator.pushNamedAndRemoveUntil(
-                  context,
-                  (argument!['sellId'] == null) ? '/layout' : '/sale',
-                  ModalRoute.withName('/home'));
-            });
+      try {
+        List sellDetail = await SellDatabase().getSellBySellId(sellId);
+        String? invoice = sellDetail.isNotEmpty ? sellDetail[0]['invoice_url'] : null;
+        String invoiceNo = sellDetail.isNotEmpty ? sellDetail[0]['invoice_no'] ?? '' : '';
+        
+        if (_printInvoice) {
+          if (printWebInvoice && invoice != null) {
+            final response = await http.Client().get(Uri.parse(invoice));
+            if (response.statusCode == 200) {
+              await Helper()
+                  .printDocument(sellId, argument!['taxId'], context, invoice: response.body)
+                  .then((value) {
+                Navigator.pushNamedAndRemoveUntil(
+                    context,
+                    (argument!['sellId'] == null) ? '/layout' : '/sale',
+                    ModalRoute.withName('/home'));
+              });
+            } else {
+              await Helper()
+                  .printDocument(sellId, argument!['taxId'], context)
+                  .then((value) {
+                Navigator.pushNamedAndRemoveUntil(
+                    context,
+                    (argument!['sellId'] == null) ? '/layout' : '/sale',
+                    ModalRoute.withName('/home'));
+              });
+            }
           } else {
-            await Helper()
-                .printDocument(sellId, argument!['taxId'], context)
-                .then((value) {
+            Helper().printDocument(sellId, argument!['taxId'], context).then((value) {
               Navigator.pushNamedAndRemoveUntil(
                   context,
                   (argument!['sellId'] == null) ? '/layout' : '/sale',
@@ -1015,48 +1017,42 @@ class CheckOutState extends State<CheckOut> {
             });
           }
         } else {
-          Helper()
-              .printDocument(sellId, argument!['taxId'], context)
-              .then((value) {
-            Navigator.pushNamedAndRemoveUntil(
-                context,
-                (argument!['sellId'] == null) ? '/layout' : '/sale',
-                ModalRoute.withName('/home'));
-          });
-        }
-      } else {
-        if (printWebInvoice && invoice != null) {
-          final response = await http.Client().get(Uri.parse(invoice));
-          if (response.statusCode == 200) {
-            await Helper()
-                .savePdf(sellId, argument!['taxId'], context, invoiceNo,
-                invoice: response.body)
-                .then((value) {
-              Navigator.pushNamedAndRemoveUntil(
-                  context,
-                  (argument!['sellId'] == null) ? '/layout' : '/sale',
-                  ModalRoute.withName('/home'));
-            });
+          if (printWebInvoice && invoice != null) {
+            final response = await http.Client().get(Uri.parse(invoice));
+            if (response.statusCode == 200) {
+              await Helper()
+                  .savePdf(sellId, argument!['taxId'], context, invoiceNo, invoice: response.body)
+                  .then((value) {
+                Navigator.pushNamedAndRemoveUntil(
+                    context,
+                    (argument!['sellId'] == null) ? '/layout' : '/sale',
+                    ModalRoute.withName('/home'));
+              });
+            } else {
+              await Helper()
+                  .savePdf(sellId, argument!['taxId'], context, invoiceNo)
+                  .then((value) {
+                Navigator.pushNamedAndRemoveUntil(
+                    context,
+                    (argument!['sellId'] == null) ? '/layout' : '/sale',
+                    ModalRoute.withName('/home'));
+              });
+            }
           } else {
-            await Helper()
-                .savePdf(sellId, argument!['taxId'], context, invoiceNo)
-                .then((value) {
+            Helper().savePdf(sellId, argument!['taxId'], context, invoiceNo).then((value) {
               Navigator.pushNamedAndRemoveUntil(
                   context,
                   (argument!['sellId'] == null) ? '/layout' : '/sale',
                   ModalRoute.withName('/home'));
             });
           }
-        } else {
-          Helper()
-              .savePdf(sellId, argument!['taxId'], context, invoiceNo)
-              .then((value) {
-            Navigator.pushNamedAndRemoveUntil(
-                context,
-                (argument!['sellId'] == null) ? '/layout' : '/sale',
-                ModalRoute.withName('/home'));
-          });
         }
+      } catch (e) {
+        print('Error in printOption: $e');
+        Navigator.pushNamedAndRemoveUntil(
+            context,
+            (argument!['sellId'] == null) ? '/layout' : '/sale',
+            ModalRoute.withName('/home'));
       }
     });
   }
@@ -1123,8 +1119,7 @@ class CheckOutState extends State<CheckOut> {
             child: Text(AppLocalizations.of(context).translate('cancel'))),
         TextButton(
             style: TextButton.styleFrom(
-                backgroundColor: Colors.red,
-                primary: themeData.colorScheme.onError),
+                backgroundColor: Colors.red, primary: themeData.colorScheme.onError),
             onPressed: () {
               Navigator.pop(context);
               if (sellId != null && payments[index]['id'] != null) {

@@ -1,0 +1,117 @@
+
+D/ViewRootImpl@e89e61d[Toast]( 3472): Creating frameDrawingCallback nextDrawUseBlastSync=false reportNextDraw=true hasBlurUpdates=false
+D/ViewRootImpl@e89e61d[Toast]( 3472): Creating frameCompleteCallback
+D/ViewRootImpl@e89e61d[Toast]( 3472): Received frameDrawingCallback frameNum=1. Creating transactionCompleteCallback=false
+D/ViewRootImpl@e89e61d[Toast]( 3472): Received frameCompleteCallback  lastAcquiredFrameNum=1 lastAttemptedDrawFrameNum=1
+I/ViewRootImpl@e89e61d[Toast]( 3472): [DP] pdf(0) 0 android.view.ViewRootImpl.lambda$addFrameCompleteCallbackIfNeeded$3$ViewRootImpl:5000 android.view.ViewRootImpl$$ExternalSyntheticLambda16.run:6 android.os.Handler.handleCallback:938 
+I/ViewRootImpl@e89e61d[Toast]( 3472): [DP] rdf()
+D/ViewRootImpl@e89e61d[Toast]( 3472): reportDrawFinished (fn: -1) 
+E/SQLiteLog( 3472): (1) no such function: GREATEST in "SELECT DISTINCT SL.*, V.display_name AS name, V.sell_price_inc_tax,
+E/SQLiteLog( 3472):              CASE 
+E/SQLiteLog( 3472):                WHEN qty_available IS NULL THEN 9999 
+E/SQLiteLog( 3472):                ELSE GREATEST(0, qty_av
+I/flutter ( 3472): Error getting incomplete lines: DatabaseException(no such function: GREATEST (code 1 SQLITE_ERROR[1]): , while compiling: SELECT DISTINCT SL.*, V.display_name AS name, V.sell_price_inc_tax,
+I/flutter ( 3472):              CASE 
+I/flutter ( 3472):                WHEN qty_available IS NULL THEN 9999 
+I/flutter ( 3472):                ELSE GREATEST(0, qty_available - COALESCE((
+I/flutter ( 3472):                  SELECT SUM(SL2.quantity) FROM sell_lines AS SL2 
+I/flutter ( 3472):                  JOIN sell AS S on SL2.sell_id = S.id
+I/flutter ( 3472):                  WHERE (SL2.is_completed = 0 OR S.transaction_date > "2025-08-14 15:54:50.707667") 
+I/flutter ( 3472):                    AND S.location_id = 1 
+I/flutter ( 3472):                    AND SL2.variation_id = V.variation_id
+I/flutter ( 3472):                ), 0))
+I/flutter ( 3472):              END as "stock_available"
+I/flutter ( 3472):              FROM "sell_lines" AS SL 
+I/flutter ( 3472):              JOIN "variations" AS V on (SL.variation_id = V.variation_id) 
+I/flutter ( 3472):              LEFT JOIN "variations_location_details" as VLD 
+I/flutter ( 3472):                ON SL.variation_id = VLD.variation_id 
+I/flutter ( 3472):                AND SL.product_id = VLD.product_id 
+I/flutter ( 3472):                AND VLD.location_id = 1
+I/flutter ( 3472):      
+I/flutter ( 3472): Error adding to cart: Exception: Insufficient stock available
+E/flutter ( 3472): [ERROR:flutter/runtime/dart_vm_initializer.cc(41)] Unhandled Exception: Exception: Insufficient stock available
+E/flutter ( 3472): #0      Sell.addToCart (package:pos_final/models/sell.dart:278:11)
+E/flutter ( 3472): <asynchronous suspension>
+E/flutter ( 3472): #1      _ProductsState.onTapProduct (package:pos_final/pages/products.dart:1299:11)
+E/flutter ( 3472): <asynchronous suspension>
+E/flutter ( 3472): 
+I/ViewRootImpl@8e6e897[MainActivity]( 3472): ViewPostIme pointer 0
+I/MSHandlerLifeCycle( 3472): isMultiSplitHandlerRequested: windowingMode=1 isFullscreen=true isPopOver=false isHidden=false skipActivityType=false isHandlerType=true this: DecorView@c7aa1b5[MainActivity]
+I/ViewRootImpl@8e6e897[MainActivity]( 3472): ViewPostIme pointer 1
+I/MSHandlerLifeCycle( 3472): isMultiSplitHandlerRequested: windowingMode=1 isFullscreen=true isPopOver=false isHidden=false skipActivityType=false isHandlerType=true this: DecorView@c7aa1b5[MainActivity]
+V/Toast   ( 3472): show: caller = io.github.ponnamkarthik.toast.fluttertoast.MethodCallHandlerImpl.onMethodCall:98 
+V/Toast   ( 3472): show: focusDisplayId = 0, isFocusInDesktop = false mCustomDisplayId=-1 isDexDualMode=false
+V/Toast   ( 3472): show: isActivityContext = false
+D/OpenGLRenderer( 3472): setSurface called with nullptr
+D/OpenGLRenderer( 3472): setSurface() destroyed EGLSurface
+D/OpenGLRenderer( 3472): destroyEglSurface
+I/ViewRootImpl@e89e61d[Toast]( 3472): dispatchDetachedFromWindow
+D/InputTransport( 3472): Input channel destroyed: 'b3f5e8b', fd=158
+I/ViewRootImpl@163c719[Toast]( 3472): setView = android.widget.FrameLayout@ffb488c TM=true
+I/ViewRootImpl@163c719[Toast]( 3472): Relayout returned: old=(0,83,1080,2301) new=(220,2095,860,2201) req=(640,106)0 dur=14 res=0x7 s={true 513904488448} ch=true fn=-1
+D/OpenGLRenderer( 3472): eglCreateWindowSurface
+I/ViewRootImpl@163c719[Toast]( 3472): [DP] dp(1) 0 android.view.ViewRootImpl.reportNextDraw:11442 android.view.ViewRootImpl.performTraversals:4198 android.view.ViewRootImpl.doTraversal:2924 
+D/ViewRootImpl@163c719[Toast]( 3472): Creating frameDrawingCallback nextDrawUseBlastSync=false reportNextDraw=true hasBlurUpdates=false
+D/ViewRootImpl@163c719[Toast]( 3472): Creating frameCompleteCallback
+D/ViewRootImpl@163c719[Toast]( 3472): Received frameDrawingCallback frameNum=1. Creating transactionCompleteCallback=false
+D/ViewRootImpl@163c719[Toast]( 3472): Received frameCompleteCallback  lastAcquiredFrameNum=1 lastAttemptedDrawFrameNum=1
+I/ViewRootImpl@163c719[Toast]( 3472): [DP] pdf(0) 0 android.view.ViewRootImpl.lambda$addFrameCompleteCallbackIfNeeded$3$ViewRootImpl:5000 android.view.ViewRootImpl$$ExternalSyntheticLambda16.run:6 android.os.Handler.handleCallback:938 
+I/ViewRootImpl@163c719[Toast]( 3472): [DP] rdf()
+D/ViewRootImpl@163c719[Toast]( 3472): reportDrawFinished (fn: -1) 
+D/OpenGLRenderer( 3472): setSurface called with nullptr
+D/OpenGLRenderer( 3472): setSurface() destroyed EGLSurface
+D/OpenGLRenderer( 3472): destroyEglSurface
+I/ViewRootImpl@163c719[Toast]( 3472): dispatchDetachedFromWindow
+D/InputTransport( 3472): Input channel destroyed: '76cce61', fd=138
+I/ViewRootImpl@8e6e897[MainActivity]( 3472): ViewPostIme pointer 0
+I/MSHandlerLifeCycle( 3472): isMultiSplitHandlerRequested: windowingMode=1 isFullscreen=true isPopOver=false isHidden=false skipActivityType=false isHandlerType=true this: DecorView@c7aa1b5[MainActivity]
+I/ViewRootImpl@8e6e897[MainActivity]( 3472): ViewPostIme pointer 1
+I/MSHandlerLifeCycle( 3472): isMultiSplitHandlerRequested: windowingMode=1 isFullscreen=true isPopOver=false isHidden=false skipActivityType=false isHandlerType=true this: DecorView@c7aa1b5[MainActivity]
+V/Toast   ( 3472): show: caller = io.github.ponnamkarthik.toast.fluttertoast.MethodCallHandlerImpl.onMethodCall:98 
+V/Toast   ( 3472): show: focusDisplayId = 0, isFocusInDesktop = false mCustomDisplayId=-1 isDexDualMode=false
+V/Toast   ( 3472): show: isActivityContext = false
+I/ViewRootImpl@660bbd5[Toast]( 3472): setView = android.widget.FrameLayout@a5a6178 TM=true
+I/ViewRootImpl@660bbd5[Toast]( 3472): Relayout returned: old=(0,83,1080,2301) new=(285,2095,795,2201) req=(510,106)0 dur=11 res=0x7 s={true 513904488448} ch=true fn=-1
+D/OpenGLRenderer( 3472): eglCreateWindowSurface
+I/ViewRootImpl@660bbd5[Toast]( 3472): [DP] dp(1) 0 android.view.ViewRootImpl.reportNextDraw:11442 android.view.ViewRootImpl.performTraversals:4198 android.view.ViewRootImpl.doTraversal:2924 
+D/ViewRootImpl@660bbd5[Toast]( 3472): Creating frameDrawingCallback nextDrawUseBlastSync=false reportNextDraw=true hasBlurUpdates=false
+D/ViewRootImpl@660bbd5[Toast]( 3472): Creating frameCompleteCallback
+D/ViewRootImpl@660bbd5[Toast]( 3472): Received frameDrawingCallback frameNum=1. Creating transactionCompleteCallback=false
+D/ViewRootImpl@660bbd5[Toast]( 3472): Received frameCompleteCallback  lastAcquiredFrameNum=1 lastAttemptedDrawFrameNum=1
+I/ViewRootImpl@660bbd5[Toast]( 3472): [DP] pdf(0) 0 android.view.ViewRootImpl.lambda$addFrameCompleteCallbackIfNeeded$3$ViewRootImpl:5000 android.view.ViewRootImpl$$ExternalSyntheticLambda16.run:6 android.os.Handler.handleCallback:938 
+I/ViewRootImpl@660bbd5[Toast]( 3472): [DP] rdf()
+D/ViewRootImpl@660bbd5[Toast]( 3472): reportDrawFinished (fn: -1) 
+E/SQLiteLog( 3472): (1) no such function: GREATEST in "SELECT DISTINCT SL.*, V.display_name AS name, V.sell_price_inc_tax,
+E/SQLiteLog( 3472):              CASE 
+E/SQLiteLog( 3472):                WHEN qty_available IS NULL THEN 9999 
+E/SQLiteLog( 3472):                ELSE GREATEST(0, qty_av
+I/flutter ( 3472): Error getting incomplete lines: DatabaseException(no such function: GREATEST (code 1 SQLITE_ERROR[1]): , while compiling: SELECT DISTINCT SL.*, V.display_name AS name, V.sell_price_inc_tax,
+I/flutter ( 3472):              CASE 
+I/flutter ( 3472):                WHEN qty_available IS NULL THEN 9999 
+I/flutter ( 3472):                ELSE GREATEST(0, qty_available - COALESCE((
+I/flutter ( 3472):                  SELECT SUM(SL2.quantity) FROM sell_lines AS SL2 
+I/flutter ( 3472):                  JOIN sell AS S on SL2.sell_id = S.id
+I/flutter ( 3472):                  WHERE (SL2.is_completed = 0 OR S.transaction_date > "2025-08-14 15:54:50.707667") 
+I/flutter ( 3472):                    AND S.location_id = 1 
+I/flutter ( 3472):                    AND SL2.variation_id = V.variation_id
+I/flutter ( 3472):                ), 0))
+I/flutter ( 3472):              END as "stock_available"
+I/flutter ( 3472):              FROM "sell_lines" AS SL 
+I/flutter ( 3472):              JOIN "variations" AS V on (SL.variation_id = V.variation_id) 
+I/flutter ( 3472):              LEFT JOIN "variations_location_details" as VLD 
+I/flutter ( 3472):                ON SL.variation_id = VLD.variation_id 
+I/flutter ( 3472):                AND SL.product_id = VLD.product_id 
+I/flutter ( 3472):                AND VLD.location_id = 1
+I/flutter ( 3472):      
+I/flutter ( 3472): Error adding to cart: Exception: Insufficient stock available
+E/flutter ( 3472): [ERROR:flutter/runtime/dart_vm_initializer.cc(41)] Unhandled Exception: Exception: Insufficient stock available
+E/flutter ( 3472): #0      Sell.addToCart (package:pos_final/models/sell.dart:278:11)
+E/flutter ( 3472): <asynchronous suspension>
+E/flutter ( 3472): #1      _ProductsState.onTapProduct (package:pos_final/pages/products.dart:1299:11)
+E/flutter ( 3472): <asynchronous suspension>
+E/flutter ( 3472): 
+D/OpenGLRenderer( 3472): setSurface called with nullptr
+D/OpenGLRenderer( 3472): setSurface() destroyed EGLSurface
+D/OpenGLRenderer( 3472): destroyEglSurface
+I/ViewRootImpl@660bbd5[Toast]( 3472): dispatchDetachedFromWindow
+D/InputTransport( 3472): Input channel destroyed: 'e7be2f ', fd=175

@@ -1,0 +1,25 @@
+NT state now CAMERA_STATE_CLOSED for client com.samsung.adaptivebrightnessgo API Level 2
+
+======== Exception caught by widgets library =======================================================
+The following LateError was thrown building Sales(dirty, dependencies: [_LocalizationsScope-[GlobalKey#f3620]], state: _SalesState#a0c24):
+LateInitializationError: Field '_tabController@100312228' has not been initialized.
+
+The relevant error-causing widget was: 
+  Sales Sales:file:///C:/Users/fikri/Desktop/orbit/lib/helpers/bottomNav.dart:79:5
+When the exception was thrown, this was the stack: 
+#0      _SalesState._tabController (package:pos_final/pages/sales.dart)
+#1      _SalesState.build (package:pos_final/pages/sales.dart:177:23)
+#2      StatefulElement.build (package:flutter/src/widgets/framework.dart:5583:27)
+#3      ComponentElement.performRebuild (package:flutter/src/widgets/framework.dart:5471:15)
+#4      StatefulElement.performRebuild (package:flutter/src/widgets/framework.dart:5634:11)
+#5      Element.rebuild (package:flutter/src/widgets/framework.dart:5187:7)
+#6      BuildOwner.buildScope (package:flutter/src/widgets/framework.dart:2895:19)
+#7      WidgetsBinding.drawFrame (package:flutter/src/widgets/binding.dart:984:21)
+#8      RendererBinding._handlePersistentFrameCallback (package:flutter/src/rendering/binding.dart:457:5)
+#9      SchedulerBinding._invokeFrameCallback (package:flutter/src/scheduler/binding.dart:1325:15)
+#10     SchedulerBinding.handleDrawFrame (package:flutter/src/scheduler/binding.dart:1255:9)
+#11     SchedulerBinding.scheduleWarmUpFrame.<anonymous closure> (package:flutter/src/scheduler/binding.dart:978:7)
+#15     _RawReceivePort._handleMessage (dart:isolate-patch/isolate_patch.dart:184:12)
+(elided 3 frames from class _Timer and dart:async-patch)
+====================================================================================================
+Reloaded 4 of 2958 libraries in 2,328ms (compile: 122 ms, reload: 1637 ms, reassemble: 449 ms).

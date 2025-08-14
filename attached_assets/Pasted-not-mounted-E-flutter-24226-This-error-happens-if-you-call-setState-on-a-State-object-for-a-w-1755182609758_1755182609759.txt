@@ -1,0 +1,69 @@
+not mounted)
+E/flutter (24226): This error happens if you call setState() on a State object for a widget that no longer appears in the widget tree (e.g., whose parent widget no longer includes the widget in its build). This error can occur when code calls setState() from a timer or an animation callback.
+E/flutter (24226): The preferred solution is to cancel the timer or stop listening to the animation in the dispose() callback. Another solution is to check the "mounted" property of this object before calling setState() to ensure the object is still in the tree.
+E/flutter (24226): This error might indicate a memory leak if setState() is being called because another object is retaining a reference to this State object after it has been removed from the tree. To avoid memory leaks, consider breaking the reference to this object during dispose().
+E/flutter (24226): #0      State.setState.<anonymous closure> (package:flutter/src/widgets/framework.dart:1167:9)
+E/flutter (24226): #1      State.setState (package:flutter/src/widgets/framework.dart:1202:6)
+E/flutter (24226): #2      _SalesState.setAllSalesList (package:pos_final/pages/sales.dart:499:5)
+E/flutter (24226): #3      _SalesState.onFilter (package:pos_final/pages/sales.dart:494:5)
+E/flutter (24226): #4      _SalesState.setLocations.<anonymous closure>.<anonymous closure> (package:pos_final/pages/sales.dart:115:9)
+E/flutter (24226): <asynchronous suspension>
+E/flutter (24226): #5      _SalesState.setLocations.<anonymous closure> (package:pos_final/pages/sales.dart:113:7)
+E/flutter (24226): <asynchronous suspension>
+E/flutter (24226): #6      _SalesState.setLocations (package:pos_final/pages/sales.dart:112:5)
+E/flutter (24226): <asynchronous suspension>
+E/flutter (24226): 
+I/ViewRootImpl@a86a869[MainActivity](24226): ViewPostIme pointer 0
+I/MSHandlerLifeCycle(24226): isMultiSplitHandlerRequested: windowingMode=1 isFullscreen=true isPopOver=false isHidden=false skipActivityType=false isHandlerType=true this: DecorView@8e6e897[MainActivity]
+I/ViewRootImpl@a86a869[MainActivity](24226): ViewPostIme pointer 1
+I/MSHandlerLifeCycle(24226): isMultiSplitHandlerRequested: windowingMode=1 isFullscreen=true isPopOver=false isHidden=false skipActivityType=false isHandlerType=true this: DecorView@8e6e897[MainActivity]
+I/ViewRootImpl@a86a869[MainActivity](24226): ViewPostIme pointer 0
+I/MSHandlerLifeCycle(24226): isMultiSplitHandlerRequested: windowingMode=1 isFullscreen=true isPopOver=false isHidden=false skipActivityType=false isHandlerType=true this: DecorView@8e6e897[MainActivity]
+I/ViewRootImpl@a86a869[MainActivity](24226): ViewPostIme pointer 1
+I/MSHandlerLifeCycle(24226): isMultiSplitHandlerRequested: windowingMode=1 isFullscreen=true isPopOver=false isHidden=false skipActivityType=false isHandlerType=true this: DecorView@8e6e897[MainActivity]
+I/ViewRootImpl@a86a869[MainActivity](24226): ViewPostIme pointer 0
+I/MSHandlerLifeCycle(24226): isMultiSplitHandlerRequested: windowingMode=1 isFullscreen=true isPopOver=false isHidden=false skipActivityType=false isHandlerType=true this: DecorView@8e6e897[MainActivity]
+I/ViewRootImpl@a86a869[MainActivity](24226): ViewPostIme pointer 1
+I/MSHandlerLifeCycle(24226): isMultiSplitHandlerRequested: windowingMode=1 isFullscreen=true isPopOver=false isHidden=false skipActivityType=false isHandlerType=true this: DecorView@8e6e897[MainActivity]
+I/flutter (24226): Error fetching permission: RangeError (index): Invalid value: Valid value range is empty: 0
+E/SQLiteLog(24226): (1) no such table: products in "SELECT DISTINCT SL.*, V.display_name AS name, V.sell_price_inc_tax,
+E/SQLiteLog(24226):              CASE 
+E/SQLiteLog(24226):                WHEN (qty_available IS NULL AND enable_stock = 0) THEN 9999 
+E/SQLiteLog(24226):                WHE
+I/flutter (24226): Error getting incomplete lines: DatabaseException(no such table: products (code 1 SQLITE_ERROR[1]): , while compiling: SELECT DISTINCT SL.*, V.display_name AS name, V.sell_price_inc_tax,
+I/flutter (24226):              CASE 
+I/flutter (24226):                WHEN (qty_available IS NULL AND enable_stock = 0) THEN 9999 
+I/flutter (24226):                WHEN (qty_available IS NULL AND enable_stock = 1) THEN 0 
+I/flutter (24226):                ELSE GREATEST(0, qty_available - COALESCE((
+I/flutter (24226):                  SELECT SUM(SL2.quantity) FROM sell_lines AS SL2 
+I/flutter (24226):                  JOIN sell AS S on SL2.sell_id = S.id
+I/flutter (24226):                  WHERE (SL2.is_completed = 0 OR S.transaction_date > "2025-08-14 15:42:30.315020") 
+I/flutter (24226):                    AND S.location_id = 15 
+I/flutter (24226):                    AND SL2.variation_id = V.variation_id
+I/flutter (24226):                ), 0))
+I/flutter (24226):              END as "stock_available"
+I/flutter (24226):              FROM "sell_lines" AS SL 
+I/flutter (24226):              JOIN "variations" AS V on (SL.variation_id = V.variation_id) 
+I/flutter (24226):              LEFT JOIN "variations_location_details" as VLD 
+I/flutter (24226):                ON SL.variation_id = VLD.variation_id 
+I/flutter (24226):  
+I/flutter (24226): Error fetching permission: RangeError (index): Invalid value: Valid value range is empty: 0
+I/ViewRootImpl@a86a869[MainActivity](24226): ViewPostIme pointer 0
+I/MSHandlerLifeCycle(24226): isMultiSplitHandlerRequested: windowingMode=1 isFullscreen=true isPopOver=false isHidden=false skipActivityType=false isHandlerType=true this: DecorView@8e6e897[MainActivity]
+I/ViewRootImpl@a86a869[MainActivity](24226): ViewPostIme pointer 1
+I/MSHandlerLifeCycle(24226): isMultiSplitHandlerRequested: windowingMode=1 isFullscreen=true isPopOver=false isHidden=false skipActivityType=false isHandlerType=true this: DecorView@8e6e897[MainActivity]
+I/ViewRootImpl@a86a869[MainActivity](24226): ViewPostIme pointer 0
+I/MSHandlerLifeCycle(24226): isMultiSplitHandlerRequested: windowingMode=1 isFullscreen=true isPopOver=false isHidden=false skipActivityType=false isHandlerType=true this: DecorView@8e6e897[MainActivity]
+I/MSHandlerLifeCycle(24226): isMultiSplitHandlerRequested: windowingMode=1 isFullscreen=true isPopOver=false isHidden=false skipActivityType=false isHandlerType=true this: DecorView@8e6e897[MainActivity]
+I/MSHandlerLifeCycle(24226): isMultiSplitHandlerRequested: windowingMode=1 isFullscreen=true isPopOver=false isHidden=false skipActivityType=false isHandlerType=true this: DecorView@8e6e897[MainActivity]
+I/MSHandlerLifeCycle(24226): isMultiSplitHandlerRequested: windowingMode=1 isFullscreen=true isPopOver=false isHidden=false skipActivityType=false isHandlerType=true this: DecorView@8e6e897[MainActivity]
+I/MSHandlerLifeCycle(24226): isMultiSplitHandlerRequested: windowingMode=1 isFullscreen=true isPopOver=false isHidden=false skipActivityType=false isHandlerType=true this: DecorView@8e6e897[MainActivity]
+I/MSHandlerLifeCycle(24226): isMultiSplitHandlerRequested: windowingMode=1 isFullscreen=true isPopOver=false isHidden=false skipActivityType=false isHandlerType=true this: DecorView@8e6e897[MainActivity]
+I/MSHandlerLifeCycle(24226): isMultiSplitHandlerRequested: windowingMode=1 isFullscreen=true isPopOver=false isHidden=false skipActivityType=false isHandlerType=true this: DecorView@8e6e897[MainActivity]
+I/MSHandlerLifeCycle(24226): isMultiSplitHandlerRequested: windowingMode=1 isFullscreen=true isPopOver=false isHidden=false skipActivityType=false isHandlerType=true this: DecorView@8e6e897[MainActivity]
+I/ViewRootImpl@a86a869[MainActivity](24226): ViewPostIme pointer 1
+I/MSHandlerLifeCycle(24226): isMultiSplitHandlerRequested: windowingMode=1 isFullscreen=true isPopOver=false isHidden=false skipActivityType=false isHandlerType=true this: DecorView@8e6e897[MainActivity]
+I/ViewRootImpl@a86a869[MainActivity](24226): ViewPostIme pointer 0
+I/MSHandlerLifeCycle(24226): isMultiSplitHandlerRequested: windowingMode=1 isFullscreen=true isPopOver=false isHidden=false skipActivityType=false isHandlerType=true this: DecorView@8e6e897[MainActivity]
+I/ViewRootImpl@a86a869[MainActivity](24226): ViewPostIme pointer 1
+I/MSHandlerLifeCycle(24226): isMultiSplitHandlerRequested: windowingMode=1 isFullscreen=true isPopOver=false isHidden=false skipActivityType=false isHandlerType=true this: DecorView@8e6e897[MainActivity]

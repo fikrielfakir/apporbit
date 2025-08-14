@@ -1,0 +1,107 @@
+// Replace the _buildLocationDropdown method with this fixed version:
+
+Widget _buildLocationDropdown() {
+  // Remove duplicates from locationListMap
+  final uniqueLocations = <Map<dynamic, dynamic>>[];
+  final seenIds = <dynamic>{};
+  
+  for (var location in locationListMap) {
+    // Create a unique key combining id and name to identify duplicates
+    final key = '${location['id']}_${location['name']}';
+    if (!seenIds.contains(key)) {
+      seenIds.add(key);
+      uniqueLocations.add(location);
+    }
+  }
+  
+  // Update locationListMap if duplicates were found
+  if (uniqueLocations.length != locationListMap.length) {
+    locationListMap = uniqueLocations;
+  }
+  
+  // Ensure selectedLocation exists in the deduplicated list
+  bool selectedExists = locationListMap.any((location) =>
+      location['id'] == selectedLocation['id'] && 
+      location['name'] == selectedLocation['name']);
+
+  if (!selectedExists && locationListMap.isNotEmpty) {
+    selectedLocation = locationListMap.first;
+  }
+
+  return Container(
+    padding: EdgeInsets.symmetric(horizontal: 12),
+    decoration: BoxDecoration(
+      border: Border.all(color: Colors.grey[300]!),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: DropdownButtonHideUnderline(
+      child: DropdownButton<Map<dynamic, dynamic>>(
+        value: selectedLocation,
+        isExpanded: true,
+        icon: Icon(MdiIcons.chevronDown, size: 20),
+        items: locationListMap.map((location) {
+          return DropdownMenuItem<Map<dynamic, dynamic>>(
+            value: location,
+            child: Text(location['name']),
+          );
+        }).toList(),
+        onChanged: (value) {
+          if (value != null) {
+            setState(() {
+              selectedLocation = value;
+            });
+          }
+        },
+      ),
+    ),
+  );
+}
+
+// Also update the setLocations method to prevent duplicates more effectively:
+
+setLocations() async {
+  if (!mounted) return;
+
+  await System().get('location').then((value) async {
+    if (!mounted) return;
+
+    // Create a new list with only the default "All" entry
+    final newLocationList = <Map<dynamic, dynamic>>[
+      {'id': 0, 'name': 'All'}
+    ];
+    
+    // Track added IDs to prevent duplicates
+    final addedIds = <dynamic>{0}; // Start with 0 since "All" has id: 0
+
+    for (var element in value) {
+      if (!mounted) return;
+      
+      // Only add if the ID hasn't been added yet
+      if (!addedIds.contains(element['id'])) {
+        addedIds.add(element['id']);
+        newLocationList.add({
+          'id': element['id'],
+          'name': element['name'],
+        });
+      }
+    }
+    
+    // Update the state only once with the complete list
+    if (mounted) {
+      setState(() {
+        locationListMap = newLocationList;
+      });
+    }
+  });
+  
+  await System().refreshPermissionList().then((value) async {
+    await getPermission().then((value) {
+      if (mounted) {
+        setState(() {
+          changeUrl = true;
+        });
+      }
+      onFilter();
+    });
+  });
+}
