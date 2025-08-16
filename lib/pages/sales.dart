@@ -1,4 +1,4 @@
-//NEW CODE
+//OLD CODE
 
 import 'dart:convert';
 import 'package:dio/dio.dart';
@@ -26,7 +26,6 @@ import '../models/system.dart';
 import 'elements.dart';
 import './add_sell_return_screen.dart';
 import './sell_return_list_screen.dart';
-import '../models/offline_manager.dart';
 
 class Sales extends StatefulWidget {
   @override
@@ -44,11 +43,11 @@ class _SalesState extends State<Sales> with TickerProviderStateMixin {
       canDeleteSell = false,
       showFilter = false,
       changeUrl = false;
-  Map<String, dynamic> selectedLocation = {'id': 0, 'name': 'All'},
+  Map<dynamic, dynamic> selectedLocation = {'id': 0, 'name': 'All'},
       selectedCustomer = {'id': 0, 'name': 'All', 'mobile': ''};
   String selectedPaymentStatus = '';
   String? startDateRange, endDateRange;
-  List<Map<String, dynamic>> allSalesListMap = [],
+  List<Map<dynamic, dynamic>> allSalesListMap = [],
       customerListMap = [
         {'id': 0, 'name': 'All', 'mobile': ''}
       ],
@@ -92,107 +91,40 @@ class _SalesState extends State<Sales> with TickerProviderStateMixin {
       isLoading = true;
     });
 
-    var productsRaw = await SellDatabase().getProductsBySellId(sellId);
-    // Fix: Use the conversion helper
-    List<Map<String, dynamic>> products = convertToStringKeyMapList(productsRaw);
+    var products = await SellDatabase().getProductsBySellId(sellId);
     setState(() {
       selectedProducts = products;
       isLoading = false;
     });
   }
 
-  // Helper method for safe type conversion
-  Map<String, dynamic> convertToStringKeyMap(dynamic input) {
-    if (input == null) {
-      return <String, dynamic>{};
-    }
-
-    if (input is Map<String, dynamic>) {
-      return input;
-    } else if (input is Map<dynamic, dynamic>) {
-      return Map<String, dynamic>.from(input);
-    } else if (input is Map) {
-      // Handle other Map types
-      Map<String, dynamic> result = {};
-      input.forEach((key, value) {
-        result[key.toString()] = value;
-      });
-      return result;
-    } else {
-      return <String, dynamic>{};
-    }
-  }
-
-  // Helper method for safe list conversion
-  List<Map<String, dynamic>> convertToStringKeyMapList(dynamic input) {
-    if (input == null) {
-      return <Map<String, dynamic>>[];
-    }
-
-    if (input is List<Map<String, dynamic>>) {
-      return input;
-    }
-
-    if (input is List) {
-      List<Map<String, dynamic>> result = [];
-      for (var item in input) {
-        result.add(convertToStringKeyMap(item));
-      }
-      return result;
-    }
-
-    return <Map<String, dynamic>>[];
-  }
-
   setCustomers() async {
-    try {
-      final customers = await Contact().get();
-      // Fix: Properly cast the dynamic maps to String-keyed maps
-      final List<Map<String, dynamic>> customerMaps = convertToStringKeyMapList(customers);
-
-      customerListMap.addAll(customerMaps);
-      if (mounted) {
-        setState(() {});
-      }
-    } catch (e) {
-      print('Error in setCustomers: $e');
-      // Ensure we have at least the default customer
-      if (mounted && customerListMap.isEmpty) {
-        setState(() {
-          customerListMap = [{'id': 0, 'name': 'All', 'mobile': ''}];
-        });
-      }
-    }
+    customerListMap.addAll(await Contact().get());
+    setState(() {});
   }
 
   setLocations() async {
     if (!mounted) return;
 
     try {
+      // Initialize with default "All" option if empty
       if (locationListMap.isEmpty) {
         locationListMap = [{'id': 0, 'name': 'All'}];
         selectedLocation = locationListMap.first;
       }
 
-      final locationsRaw = await System().get('location');
-
-      // Convert to String-keyed maps properly
-      List<Map<String, dynamic>> locations = [];
-      if (locationsRaw is List) {
-        for (var item in locationsRaw) {
-          locations.add(convertToStringKeyMap(item));
-        }
-      }
-
+      final locations = await System().get('location');
       if (!mounted) return;
 
-      final Map<int, Map<String, dynamic>> uniqueLocations = {
-        0: {'id': 0, 'name': 'All'}
+      // Use a Map to ensure uniqueness by ID
+      final Map<dynamic, Map<dynamic, dynamic>> uniqueLocations = {
+        0: {'id': 0, 'name': 'All'} // Always include the default "All" option
       };
 
+      // Add locations from the system, avoiding duplicates
       for (var element in locations) {
         final id = element['id'];
-        if (id != null && id != 0) {
+        if (id != null && id != 0) { // Don't override the "All" option
           uniqueLocations[id] = {
             'id': id,
             'name': element['name'] ?? 'Unknown Location',
@@ -202,14 +134,23 @@ class _SalesState extends State<Sales> with TickerProviderStateMixin {
 
       if (!mounted) return;
 
-      setState(() {
-        locationListMap = uniqueLocations.values.toList();
+      // Convert back to list
+      final newLocationList = uniqueLocations.values.toList();
 
-        if (!locationListMap.any((loc) => loc['id'] == selectedLocation['id'])) {
-          selectedLocation = locationListMap.first;
+      // Update state
+      setState(() {
+        locationListMap = newLocationList;
+
+        // Ensure selectedLocation is still valid
+        bool selectedExists = locationListMap.any((location) =>
+        location['id'] == selectedLocation['id']);
+
+        if (!selectedExists) {
+          selectedLocation = locationListMap.first; // Default to "All"
         }
       });
 
+      // Handle permissions
       await System().refreshPermissionList();
       if (!mounted) return;
 
@@ -219,11 +160,11 @@ class _SalesState extends State<Sales> with TickerProviderStateMixin {
       setState(() {
         changeUrl = true;
       });
-
       onFilter();
 
     } catch (e) {
       print('Error in setLocations: $e');
+      // Ensure we have at least the default "All" option
       if (mounted) {
         setState(() {
           if (locationListMap.isEmpty) {
@@ -239,6 +180,8 @@ class _SalesState extends State<Sales> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     if (_tabController == null) {
       return Scaffold(
+
+
         body: Center(
           child: CircularProgressIndicator(),
         ),
@@ -1075,13 +1018,11 @@ class _SalesState extends State<Sales> with TickerProviderStateMixin {
       selectedLocation = locationListMap.first;
     }
 
-    // Remove duplicates based on ID - FIX: Use proper types
-    final Map<dynamic, Map<String, dynamic>> uniqueLocationsMap = {};
+    // Remove duplicates based on ID
+    final Map<dynamic, Map<dynamic, dynamic>> uniqueLocationsMap = {};
     for (var location in locationListMap) {
-      uniqueLocationsMap[location['id']] = convertToStringKeyMap(location);
+      uniqueLocationsMap[location['id']] = location;
     }
-
-    // FIX: Convert the values to the correct type
     locationListMap = uniqueLocationsMap.values.toList();
 
     // Ensure selectedLocation exists in the cleaned list
@@ -1135,7 +1076,7 @@ class _SalesState extends State<Sales> with TickerProviderStateMixin {
                 );
 
                 setState(() {
-                  selectedLocation = convertToStringKeyMap(foundLocation);
+                  selectedLocation = foundLocation;
                 });
               }
             }
@@ -1513,7 +1454,7 @@ class _SalesState extends State<Sales> with TickerProviderStateMixin {
     }
     if (await Helper().getPermission("view_overdue_sells_only")) {
       paymentStatuses.add('overdue');
-      selectedPaymentStatus = 'overdue';
+      selectedPaymentStatus = 'all';
     }
     if (await Helper().getPermission("direct_sell.view")) {
       url = Api().baseUrl + Api().apiUrl + "/sell?order_by_date=desc";
@@ -1552,126 +1493,47 @@ class _SalesState extends State<Sales> with TickerProviderStateMixin {
     }
   }
 
-  _loadSalesFromCache() async {
-    if (!mounted) return;
-
-    try {
-      final cachedSalesRaw = await SellDatabase().getSells(all: true);
-
-      // Fix: Ensure proper type conversion
-      List<Map<String, dynamic>> cachedSales = [];
-      if (cachedSalesRaw is List) {
-        for (var item in cachedSalesRaw) {
-          cachedSales.add(convertToStringKeyMap(item));
+  sells() async {
+    sellList = [];
+    await SellDatabase().getSells(all: true).then((value) {
+      value.forEach((element) async {
+        if (element['is_synced'] == 0) if (mounted) {
+          setState(() {
+            synced = false;
+          });
         }
-      }
-
-      List<Map<String, dynamic>> formattedSales = [];
-
-      for (var element in cachedSales) {
-        var customerDetail = await Contact().getCustomerDetailById(element['contact_id']);
-        var locationName = await Helper().getLocationNameById(element['location_id']);
-
-        formattedSales.add({
-          'id': element['id'],
-          'transaction_date': element['transaction_date'],
-          'invoice_no': element['invoice_no'],
-          'customer_name': customerDetail != null ? customerDetail['name'] : 'N/A',
-          'mobile': customerDetail != null ? customerDetail['mobile'] : '',
-          'contact_id': element['contact_id'],
-          'location_id': element['location_id'],
-          'location_name': locationName ?? 'N/A',
-          'status': element['status'],
-          'tax_rate_id': element['tax_rate_id'],
-          'discount_amount': element['discount_amount'],
-          'discount_type': element['discount_type'],
-          'sale_note': element['sale_note'],
-          'staff_note': element['staff_note'],
-          'invoice_amount': element['invoice_amount'],
-          'pending_amount': element['pending_amount'],
-          'is_synced': element['is_synced'],
-          'is_quotation': element['is_quotation'],
-          'invoice_url': element['invoice_url'],
-          'transaction_id': element['transaction_id']
-        });
-      }
-
-      if (mounted) {
-        setState(() {
-          sellList = formattedSales;
-          synced = false; // Assume not synced if loading from cache
-        });
-      }
-
-      await Helper().getFormattedBusinessDetails().then((value) {
+        var customerDetail =
+        await Contact().getCustomerDetailById(element['contact_id']);
+        var locationName =
+        await Helper().getLocationNameById(element['location_id']);
         if (mounted) {
           setState(() {
-            symbol = value['symbol'];
+            sellList.add({
+              'id': element['id'],
+              'transaction_date': element['transaction_date'],
+              'invoice_no': element['invoice_no'],
+              'customer_name': customerDetail['name'],
+              'mobile': customerDetail['mobile'],
+              'contact_id': element['contact_id'],
+              'location_id': element['location_id'],
+              'location_name': locationName,
+              'status': element['status'],
+              'tax_rate_id': element['tax_rate_id'],
+              'discount_amount': element['discount_amount'],
+              'discount_type': element['discount_type'],
+              'sale_note': element['sale_note'],
+              'staff_note': element['staff_note'],
+              'invoice_amount': element['invoice_amount'],
+              'pending_amount': element['pending_amount'],
+              'is_synced': element['is_synced'],
+              'is_quotation': element['is_quotation'],
+              'invoice_url': element['invoice_url'],
+              'transaction_id': element['transaction_id']
+            });
           });
         }
       });
-    } catch (e) {
-      print('Error loading sales from cache: $e');
-    }
-  }
-
-  sells() async {
-    sellList = [];
-
-    // Check connectivity and offline mode
-    bool hasConnectivity = await Helper().checkConnectivity();
-    bool isOfflineMode = await OfflineManager().isOfflineMode;
-
-    if (!hasConnectivity || isOfflineMode) {
-      await _loadSalesFromCache();
-      return;
-    }
-
-    try {
-      await SellDatabase().getSells(all: true).then((value) {
-        value.forEach((element) async {
-          if (element['is_synced'] == 0) if (mounted) {
-            setState(() {
-              synced = false;
-            });
-          }
-          var customerDetail =
-          await Contact().getCustomerDetailById(element['contact_id']);
-          var locationName =
-          await Helper().getLocationNameById(element['location_id']);
-          if (mounted) {
-            setState(() {
-              sellList.add({
-                'id': element['id'],
-                'transaction_date': element['transaction_date'],
-                'invoice_no': element['invoice_no'],
-                'customer_name': customerDetail['name'],
-                'mobile': customerDetail['mobile'],
-                'contact_id': element['contact_id'],
-                'location_id': element['location_id'],
-                'location_name': locationName,
-                'status': element['status'],
-                'tax_rate_id': element['tax_rate_id'],
-                'discount_amount': element['discount_amount'],
-                'discount_type': element['discount_type'],
-                'sale_note': element['sale_note'],
-                'staff_note': element['staff_note'],
-                'invoice_amount': element['invoice_amount'],
-                'pending_amount': element['pending_amount'],
-                'is_synced': element['is_synced'],
-                'is_quotation': element['is_quotation'],
-                'invoice_url': element['invoice_url'],
-                'transaction_id': element['transaction_id']
-              });
-            });
-          }
-        });
-      });
-    } catch (e) {
-      print('Error loading sells: $e');
-      await _loadSalesFromCache(); // Fallback to cache
-    }
-
+    });
     await Helper().getFormattedBusinessDetails().then((value) {
       if (mounted) {
         setState(() {
@@ -1718,86 +1580,50 @@ class _SalesState extends State<Sales> with TickerProviderStateMixin {
         isLoading = true;
       });
     }
+    final dio = new Dio();
+    var token = await System().getToken();
+    dio.options.headers['content-Type'] = 'application/json';
+    dio.options.headers["Authorization"] = "Bearer $token";
+    final response = await dio.get(nextPage!);
+    List sales = response.data['data'];
+    Map links = response.data['links'];
+    nextPage = links['next'];
+    sales.forEach((sell) async {
+      var paidAmount;
+      List payments = sell['payment_lines'];
+      double totalPaid = 0.00;
+      Map<String, dynamic>? customer =
+      await Contact().getCustomerDetailById(sell['contact_id']);
+      var location = await Helper().getLocationNameById(sell['location_id']);
+      payments.forEach((element) {
+        totalPaid += double.parse(element['amount']);
+      });
+      (totalPaid <= double.parse(sell['final_total']))
+          ? paidAmount = Helper().formatCurrency(totalPaid)
+          : paidAmount = Helper().formatCurrency(sell['final_total']);
 
-    try {
-      final dio = new Dio();
-      var token = await System().getToken();
-      dio.options.headers['content-Type'] = 'application/json';
-      dio.options.headers["Authorization"] = "Bearer $token";
-      final response = await dio.get(nextPage!);
-      final salesRaw = response.data['data'];
+      allSalesListMap.add({
+        'id': sell['id'],
+        'location_name': location,
+        'contact_name': customer != null ? customer['name'] : '',
+        'mobile': customer != null ? customer['mobile'] : null,
+        'invoice_no': sell['invoice_no'],
+        'invoice_url': sell['invoice_url'],
+        'date_time': sell['transaction_date'],
+        'invoice_amount': sell['final_total'] != null
+            ? double.parse(sell['final_total'].toString()).toStringAsFixed(2)
+            : '0.00',
+        'status': sell['payment_status'] ?? sell['status'],
+        'paid_amount': paidAmount,
+        'is_quotation': sell['is_quotation'].toString()
+      });
 
-      // Fix: Properly handle the dynamic type conversion
-      List<Map<String, dynamic>> sales = [];
-      if (salesRaw is List) {
-        for (var item in salesRaw) {
-          sales.add(convertToStringKeyMap(item));
-        }
-      }
-
-      Map links = response.data['links'];
-      nextPage = links['next'];
-
-      // FIX: Create a new list to avoid type conflicts
-      List<Map<String, dynamic>> tempSalesListMap = [];
-
-      for (var sell in sales) {
-        try {
-          var paidAmount;
-          var payments = sell['payment_lines'];
-          double totalPaid = 0.00;
-          Map<String, dynamic>? customer =
-          await Contact().getCustomerDetailById(sell['contact_id']);
-          var location = await Helper().getLocationNameById(sell['location_id']);
-
-          if (payments is List) {
-            for (var element in payments) {
-              var paymentMap = convertToStringKeyMap(element);
-              totalPaid += double.tryParse(paymentMap['amount'].toString()) ?? 0.0;
-            }
-          }
-
-          double finalTotal = double.tryParse(sell['final_total'].toString()) ?? 0.0;
-
-          (totalPaid <= finalTotal)
-              ? paidAmount = Helper().formatCurrency(totalPaid)
-              : paidAmount = Helper().formatCurrency(finalTotal);
-
-          // Add to temporary list first
-          tempSalesListMap.add({
-            'id': sell['id'],
-            'location_name': location,
-            'contact_name': customer != null ? customer['name'] : '',
-            'mobile': customer != null ? customer['mobile'] : null,
-            'invoice_no': sell['invoice_no'],
-            'invoice_url': sell['invoice_url'],
-            'date_time': sell['transaction_date'],
-            'invoice_amount': finalTotal.toStringAsFixed(2),
-            'status': sell['payment_status'] ?? sell['status'],
-            'paid_amount': paidAmount,
-            'is_quotation': sell['is_quotation'].toString()
-          });
-        } catch (e) {
-          print('Error processing individual sale: $e');
-          continue;
-        }
-      }
-
-      // Now assign the temporary list to allSalesListMap
       if (this.mounted) {
         setState(() {
-          allSalesListMap.addAll(tempSalesListMap);
           isLoading = false;
         });
       }
-    } catch (e) {
-      print('Error in setAllSalesList: $e');
-      if (mounted) {
-        setState(() {
-          isLoading = false;
-        });
-      }
-    }
+    });
   }
 
   String checkStatus(double invoiceAmount, double pendingAmount) {
@@ -1822,109 +1648,71 @@ class _SalesState extends State<Sales> with TickerProviderStateMixin {
     }
   }
 
-  // FIXED METHOD - This is where the error was occurring
   updateSellsFromApi() async {
-    try {
-      List transactionIds = await SellDatabase().getTransactionIds();
+    List transactionIds = await SellDatabase().getTransactionIds();
 
-      if (transactionIds.isNotEmpty) {
-        final specificSalesRaw = await SellApi().getSpecifiedSells(transactionIds);
+    if (transactionIds.isNotEmpty) {
+      List specificSales = await SellApi().getSpecifiedSells(transactionIds);
 
-        // FIX: Convert raw response to List<Map<String, dynamic>>
-        List<Map<String, dynamic>> specificSales;
+      specificSales.forEach((element) async {
+        List sell = await SellDatabase().getSellByTransactionId(element['id']);
 
-        if (specificSalesRaw is List) {
-          specificSales = specificSalesRaw.map<Map<String, dynamic>>((item) {
-            return convertToStringKeyMap(item);
-          }).toList();
-        } else {
-          print('Error: specificSalesRaw is not a List');
-          return;
+        if (sell.length > 0) {
+          await PaymentDatabase().delete(sell[0]['id']);
+          element['payment_lines'].forEach((value) async {
+            await PaymentDatabase().store({
+              'sell_id': sell[0]['id'],
+              'method': value['method'],
+              'amount': value['amount'],
+              'note': value['note'],
+              'payment_id': value['id'],
+              'is_return': value['is_return'],
+              'account_id': value['account_id']
+            });
+          });
+
+          await SellDatabase().deleteSellLineBySellId(sell[0]['id']);
+
+          element['sell_lines'].forEach((value) async {
+            await SellDatabase().store({
+              'sell_id': sell[0]['id'],
+              'product_id': value['product_id'],
+              'variation_id': value['variation_id'],
+              'quantity': value['quantity'],
+              'unit_price': value['unit_price_before_discount'],
+              'tax_rate_id': value['tax_id'],
+              'discount_amount': value['line_discount_amount'],
+              'discount_type': value['line_discount_type'],
+              'note': value['sell_line_note'],
+              'is_completed': 1
+            });
+          });
+          updateSells(element);
         }
-
-        for (var element in specificSales) {
-          try {
-            List sell = await SellDatabase().getSellByTransactionId(element['id']);
-
-            if (sell.length > 0) {
-              await PaymentDatabase().delete(sell[0]['id']);
-
-              // Handle payment_lines - ensure it's a List
-              var paymentLines = element['payment_lines'];
-              if (paymentLines is List) {
-                for (var value in paymentLines) {
-                  var paymentMap = convertToStringKeyMap(value);
-                  await PaymentDatabase().store({
-                    'sell_id': sell[0]['id'],
-                    'method': paymentMap['method'],
-                    'amount': paymentMap['amount'],
-                    'note': paymentMap['note'],
-                    'payment_id': paymentMap['id'],
-                    'is_return': paymentMap['is_return'],
-                    'account_id': paymentMap['account_id']
-                  });
-                }
-              }
-
-              await SellDatabase().deleteSellLineBySellId(sell[0]['id']);
-
-              // Handle sell_lines - ensure it's a List
-              var sellLines = element['sell_lines'];
-              if (sellLines is List) {
-                for (var value in sellLines) {
-                  var sellLineMap = convertToStringKeyMap(value);
-                  await SellDatabase().store({
-                    'sell_id': sell[0]['id'],
-                    'product_id': sellLineMap['product_id'],
-                    'variation_id': sellLineMap['variation_id'],
-                    'quantity': sellLineMap['quantity'],
-                    'unit_price': sellLineMap['unit_price_before_discount'],
-                    'tax_rate_id': sellLineMap['tax_id'],
-                    'discount_amount': sellLineMap['line_discount_amount'],
-                    'discount_type': sellLineMap['line_discount_type'],
-                    'note': sellLineMap['sell_line_note'],
-                    'is_completed': 1
-                  });
-                }
-              }
-
-              await updateSells(element);
-            }
-          } catch (e) {
-            print('Error processing sell element: $e');
-            continue; // Continue with next element if one fails
-          }
-        }
-      }
-    } catch (e) {
-      print('Error in updateSellsFromApi: $e');
+      });
     }
   }
 
   updateSells(sells) async {
-    try {
-      var changeReturn = 0.0;
-      var pendingAmount = 0.0;
-      var totalAmount = 0.0;
-      List sell = await SellDatabase().getSellByTransactionId(sells['id']);
-      await PaymentDatabase().get(sell[0]['id'], allColumns: true).then((value) {
-        value.forEach((element) {
-          if (element['is_return'] == 1) {
-            changeReturn += element['amount'];
-          } else {
-            totalAmount += element['amount'];
-          }
-        });
+    var changeReturn = 0.0;
+    var pendingAmount = 0.0;
+    var totalAmount = 0.0;
+    List sell = await SellDatabase().getSellByTransactionId(sells['id']);
+    await PaymentDatabase().get(sell[0]['id'], allColumns: true).then((value) {
+      value.forEach((element) {
+        if (element['is_return'] == 1) {
+          changeReturn += element['amount'];
+        } else {
+          totalAmount += element['amount'];
+        }
       });
-      if (double.parse(sells['final_total']) > totalAmount) {
-        pendingAmount = double.parse(sells['final_total']) - totalAmount;
-      }
-      Map<String, dynamic> sellMap =
-      Sell().createSellMap(sells, changeReturn, pendingAmount);
-      await SellDatabase().updateSells(sell[0]['id'], sellMap);
-    } catch (e) {
-      print('Error in updateSells: $e');
+    });
+    if (double.parse(sells['final_total']) > totalAmount) {
+      pendingAmount = double.parse(sells['final_total']) - totalAmount;
     }
+    Map<String, dynamic> sellMap =
+    Sell().createSellMap(sells, changeReturn, pendingAmount);
+    await SellDatabase().updateSells(sell[0]['id'], sellMap);
   }
 
   String normalizeNumber(String amount) {

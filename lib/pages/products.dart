@@ -89,8 +89,9 @@ class _ProductsState extends State<Products> {
   initState() {
     super.initState();
     dbProvider = DbProvider();
-    getPermission();
-
+    // Enable all permissions by default
+    canAddSell = true;
+    canViewProducts = true;
 
     _scrollController.addListener(() {
       if (_scrollDebouncer?.isActive ?? false) _scrollDebouncer?.cancel();
@@ -134,19 +135,36 @@ class _ProductsState extends State<Products> {
   Future<void> syncProducts() async {
     if (!mounted || isLoading) return;
 
+    // Check internet connectivity first
+    bool hasConnectivity = await Helper().checkConnectivity();
+    if (!hasConnectivity) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No internet connection available for sync'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     setState(() => isLoading = true);
 
+    // Store current data in case sync fails
+    List currentProducts = List.from(products);
+    int currentOffset = offset;
+    bool currentHasReachedMax = hasReachedMax;
+
     try {
-      // Clear existing data
+      // Force sync from server first - don't clear cache until this succeeds
+      await Variations().refresh();
+      await System().insertProductLastSyncDateTimeNow();
+
+      // Only clear existing data after successful sync
       setState(() {
         products = [];
         offset = 0;
         hasReachedMax = false;
       });
-
-      // Force sync from server
-      await Variations().refresh();
-      await System().insertProductLastSyncDateTimeNow();
 
       // Reload data
       await productList();
@@ -157,6 +175,13 @@ class _ProductsState extends State<Products> {
             Text(AppLocalizations.of(context).translate('sync_complete'))),
       );
     } catch (e) {
+      // Restore previous data if sync failed
+      setState(() {
+        products = currentProducts;
+        offset = currentOffset;
+        hasReachedMax = currentHasReachedMax;
+      });
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text(
@@ -174,13 +199,44 @@ class _ProductsState extends State<Products> {
 
     setState(() {
       _isRefreshing = true;
-      products = [];
-      offset = 0;
-      hasReachedMax = false;
     });
 
+    // Store current data in case we need to restore it
+    List currentProducts = List.from(products);
+    int currentOffset = offset;
+    bool currentHasReachedMax = hasReachedMax;
+
     try {
-      await productList();
+      // Check internet connectivity before clearing cache
+      bool hasConnectivity = await Helper().checkConnectivity();
+
+      if (hasConnectivity) {
+        // Only clear products if we have internet connection
+        setState(() {
+          products = [];
+          offset = 0;
+          hasReachedMax = false;
+        });
+
+        await productList();
+      } else {
+        // No internet, just reload from existing cache
+        print('No internet connection - refreshing from cache only');
+        setState(() {
+          products = [];
+          offset = 0;
+          hasReachedMax = false;
+        });
+        await productList();
+      }
+    } catch (e) {
+      // If refresh fails, restore previous data
+      print('Refresh failed, restoring previous data: $e');
+      setState(() {
+        products = currentProducts;
+        offset = currentOffset;
+        hasReachedMax = currentHasReachedMax;
+      });
     } finally {
       if (mounted) {
         setState(() => _isRefreshing = false);
@@ -206,15 +262,10 @@ class _ProductsState extends State<Products> {
 
   //Set location & product
   setInitDetails(selectedLocationId) async {
-    var activeSubscriptionDetails = await System().get('active-subscription');
-    if (activeSubscriptionDetails.length > 0) {
-      setState(() {
-        canMakeSell = true;
-      });
-    } else {
-      Fluttertoast.showToast(
-          msg: AppLocalizations.of(context).translate('no_subscription_found'));
-    }
+    // Enable sell functionality by default
+    setState(() {
+      canMakeSell = true;
+    });
 
     await Helper().getFormattedBusinessDetails().then((value) {
       symbol = value['symbol'] + ' ';
@@ -257,15 +308,7 @@ class _ProductsState extends State<Products> {
     productList();
   }
 
-  //Fetch permission from database
-  getPermission() async {
-    if (await Helper().getPermission("direct_sell.access")) {
-      canAddSell = true;
-    }
-    if (await Helper().getPermission("product.view")) {
-      canViewProducts = true;
-    }
-  }
+
 
   //set selling Price Group Id
   findSellingPriceGroupId(locId) {
@@ -469,16 +512,22 @@ class _ProductsState extends State<Products> {
           bool needsSync = lastSync == null ||
               (date2.difference(DateTime.parse(lastSync)).inMinutes > 10);
 
-          // Initialize/refresh data when online
+          // Initialize/refresh data when online - but don't clear cache until sync is successful
           if (needsSync || offset == 1) {
             print('Syncing product data...');
-            await Variations().refresh();
-            await System().insertProductLastSyncDateTimeNow();
+            try {
+              await Variations().refresh();
+              await System().insertProductLastSyncDateTimeNow();
+              print('Sync successful - cache updated');
+            } catch (syncError) {
+              print('Sync failed, keeping existing cache: $syncError');
+              // Don't clear cache, continue with existing data
+            }
           }
 
           findSellingPriceGroupId(selectedLocationId);
 
-          // Get products from database (which now has fresh data)
+          // Get products from database (which may have fresh data or cached data)
           await Variations()
               .get(
               brandId: brandId,
@@ -674,7 +723,6 @@ class _ProductsState extends State<Products> {
       }
     });
 
-    await getPermission();
     await productList();
   }
 
@@ -750,25 +798,6 @@ class _ProductsState extends State<Products> {
         ),
         body: isLoading && products.isEmpty
             ? Center(child: CircularProgressIndicator())
-            : !canViewProducts
-            ? RefreshIndicator(
-          onRefresh: _handleRefresh,
-          child: ListView(
-            physics: AlwaysScrollableScrollPhysics(),
-            children: [
-              Container(
-                height: MediaQuery.of(context).size.height * 0.8,
-                child: Center(
-                  child: Text(
-                    AppLocalizations.of(context)
-                        .translate('unauthorised'),
-                    style: TextStyle(color: Colors.black),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        )
             : RefreshIndicator(
           onRefresh: _handleRefresh,
           child: Stack(
@@ -1405,56 +1434,45 @@ class _ProductsState extends State<Products> {
 
   //add product to cart after scanning barcode
   getScannedProduct(String barcode) async {
-    if (canMakeSell) {
-      await Variations()
-          .get(
-          locationId: selectedLocationId,
-          barcode: barcode,
-          offset: 0,
-          searchTerm: searchController.text)
-          .then((value) async {
-        if (canAddSell) {
-          if (value.length > 0) {
-            var price;
-            var product;
-            if (value[0]['selling_price_group'] != null) {
-              jsonDecode(value[0]['selling_price_group']).forEach((element) {
-                if (element['key'] == sellingPriceGroupId) {
-                  price = element['value'];
-                }
-              });
+    await Variations()
+        .get(
+        locationId: selectedLocationId,
+        barcode: barcode,
+        offset: 0,
+        searchTerm: searchController.text)
+        .then((value) async {
+      if (value.length > 0) {
+        var price;
+        var product;
+        if (value[0]['selling_price_group'] != null) {
+          jsonDecode(value[0]['selling_price_group']).forEach((element) {
+            if (element['key'] == sellingPriceGroupId) {
+              price = element['value'];
             }
-            setState(() {
-              product = ProductModel().product(value[0], price);
-            });
-            if (product != null && product['stock_available'] > 0) {
-              Fluttertoast.showToast(
-                  msg: AppLocalizations.of(context).translate('added_to_cart'));
-              await Sell().addToCart(
-                  product, argument != null ? argument!['sellId'] : null);
-              if (argument != null) {
-                selectedLocationId = argument!['locationId'];
-              }
-            } else {
-              Fluttertoast.showToast(
-                  msg:
-                  "${AppLocalizations.of(context).translate("out_of_stock")}");
-            }
-          } else {
-            Fluttertoast.showToast(
-                msg:
-                "${AppLocalizations.of(context).translate("no_product_found")}");
+          });
+        }
+        setState(() {
+          product = ProductModel().product(value[0], price);
+        });
+        if (product != null && product['stock_available'] > 0) {
+          Fluttertoast.showToast(
+              msg: AppLocalizations.of(context).translate('added_to_cart'));
+          await Sell().addToCart(
+              product, argument != null ? argument!['sellId'] : null);
+          if (argument != null) {
+            selectedLocationId = argument!['locationId'];
           }
         } else {
           Fluttertoast.showToast(
               msg:
-              "${AppLocalizations.of(context).translate("no_sells_permission")}");
+              "${AppLocalizations.of(context).translate("out_of_stock")}");
         }
-      });
-    } else {
-      Fluttertoast.showToast(
-          msg: AppLocalizations.of(context).translate('no_subscription_found'));
-    }
+      } else {
+        Fluttertoast.showToast(
+            msg:
+            "${AppLocalizations.of(context).translate("no_product_found")}");
+      }
+    });
   }
 
   Widget _productsList() {
@@ -1536,17 +1554,6 @@ class _ProductsState extends State<Products> {
 
   //onTap product
   onTapProduct(int index) async {
-    if (!canAddSell) {
-      Fluttertoast.showToast(
-          msg: AppLocalizations.of(context).translate('no_subscription_found'));
-      return;
-    }
-
-    if (!canMakeSell) {
-      Fluttertoast.showToast(
-          msg: AppLocalizations.of(context).translate('no_sells_permission'));
-      return;
-    }
 
     // Check stock before attempting to add
     if (products[index]['enable_stock'] != 0 && products[index]['stock_available'] <= 0) {
