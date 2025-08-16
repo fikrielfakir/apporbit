@@ -129,7 +129,7 @@ class OfflineManager {
     return contacts;
   }
 
-  // Cache sales for offline use
+  // Cache sales for offline use (Recent Sales)
   Future<void> cacheSales(List<Map<String, dynamic>> sales) async {
     final batch = _database!.batch();
 
@@ -146,9 +146,35 @@ class OfflineManager {
     await batch.commit();
   }
 
-  // Get cached sales
+  // Get cached sales (Recent Sales)
   Future<List<Map<String, dynamic>>> getCachedSales() async {
     final result = await _database!.query('cached_sales');
+
+    return result.map((row) {
+      return jsonDecode(row['sale_data'] as String) as Map<String, dynamic>;
+    }).toList();
+  }
+
+  // Cache all sales for offline use (All Sales Tab)
+  Future<void> cacheAllSales(List<Map<String, dynamic>> allSales) async {
+    final batch = _database!.batch();
+
+    batch.delete('cached_all_sales');
+
+    for (var sale in allSales) {
+      batch.insert('cached_all_sales', {
+        'id': sale['id'],
+        'sale_data': jsonEncode(sale),
+        'cached_at': DateTime.now().millisecondsSinceEpoch,
+      });
+    }
+
+    await batch.commit();
+  }
+
+  // Get cached all sales (All Sales Tab)
+  Future<List<Map<String, dynamic>>> getCachedAllSales() async {
+    final result = await _database!.query('cached_all_sales');
 
     return result.map((row) {
       return jsonDecode(row['sale_data'] as String) as Map<String, dynamic>;
@@ -177,6 +203,44 @@ class OfflineManager {
         where: 'id = ?',
         whereArgs: [id]
     );
+  }
+
+  // Check if any cached data exists
+  Future<bool> hasCachedData() async {
+    try {
+      final cachedSales = await _database!.query('cached_sales');
+      final cachedAllSales = await _database!.query('cached_all_sales');
+      final cachedProducts = await _database!.query('cached_products');
+      final cachedContacts = await _database!.query('cached_contacts');
+
+      return cachedSales.isNotEmpty ||
+          cachedAllSales.isNotEmpty ||
+          cachedProducts.isNotEmpty ||
+          cachedContacts.isNotEmpty;
+    } catch (e) {
+      print('Error checking cached data: $e');
+      return false;
+    }
+  }
+
+  // Get cached data summary
+  Future<Map<String, int>> getCachedDataSummary() async {
+    try {
+      final cachedSales = await _database!.query('cached_sales');
+      final cachedAllSales = await _database!.query('cached_all_sales');
+      final cachedProducts = await _database!.query('cached_products');
+      final cachedContacts = await _database!.query('cached_contacts');
+
+      return {
+        'sales': cachedSales.length,
+        'all_sales': cachedAllSales.length,
+        'products': cachedProducts.length,
+        'contacts': cachedContacts.length,
+      };
+    } catch (e) {
+      print('Error getting cached data summary: $e');
+      return {};
+    }
   }
 
   // Sync queued actions when online

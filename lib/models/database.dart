@@ -187,6 +187,9 @@ class DbProvider {
         'CREATE TABLE IF NOT EXISTS cached_sales (id INTEGER PRIMARY KEY, sale_data TEXT, cached_at INTEGER)');
 
     await db.execute(
+        'CREATE TABLE IF NOT EXISTS cached_all_sales (id INTEGER PRIMARY KEY, sale_data TEXT, cached_at INTEGER)');
+
+    await db.execute(
         'CREATE TABLE IF NOT EXISTS offline_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, action_type TEXT, action_data TEXT, created_at INTEGER, synced INTEGER DEFAULT 0)');
 
     // Original table creations
