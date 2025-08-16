@@ -221,28 +221,28 @@ class _HomeState extends State<Home> {
                     ),
                     _buildStatCard(
                       title: AppLocalizations.of(context).translate('number_of_sales'),
-                      value: '$totalSales',
+                      value: '${totalSales ?? 0}',
                       icon: Icons.shopping_cart,
                       color: Color(0xff4285F4),
                     ),
                     SizedBox(width: 12),
                     _buildStatCard(
                       title: AppLocalizations.of(context).translate('sales_amount'),
-                      value: '$businessSymbol ${(totalSalesAmount)}',
+                      value: '$businessSymbol ${totalSalesAmount.toStringAsFixed(2)}',
                       icon: Icons.attach_money,
                       color: Color(0xff34A853),
                     ),
                     SizedBox(width: 12),
                     _buildStatCard(
                       title: AppLocalizations.of(context).translate('paid_amount'),
-                      value: '$businessSymbol ${(totalReceivedAmount)}',
+                      value: '$businessSymbol ${totalReceivedAmount.toStringAsFixed(2)}',
                       icon: Icons.payment,
                       color: Color(0xffFBBC05),
                     ),
                     SizedBox(width: 12),
                     _buildStatCard(
                       title: AppLocalizations.of(context).translate('due_amount'),
-                      value: '$businessSymbol ${(totalDueAmount)}',
+                      value: '$businessSymbol ${totalDueAmount.toStringAsFixed(2)}',
                       icon: Icons.money_off,
                       color: Color(0xffEA4335),
                     ),
@@ -701,8 +701,17 @@ class _HomeState extends State<Home> {
   }
 
   Future<List> loadStatistics() async {
-    List result = await SellDatabase().getSells();
-    totalSales = result.length;
+    List result = await SellDatabase().getSells(); // This already excludes quotations by default
+    List allSales = await SellDatabase().getSells(all: true); // Get all including quotations
+
+    // Create allSalesListMap and fetch all sales from database
+    List<Map<dynamic, dynamic>> allSalesListMap = [];
+    allSales.forEach((sale) {
+      allSalesListMap.add(Map<dynamic, dynamic>.from(sale));
+    });
+
+    // Set totalSales to the length of allSalesListMap
+    totalSales = allSalesListMap.length;
 
     // Get today's date for daily sales calculation
     String today = DateTime.now().toIso8601String().split('T')[0];
@@ -720,28 +729,40 @@ class _HomeState extends State<Home> {
 
     this.dailySalesCount = dailySalesCount;
 
-    setState(() {
-      result.forEach((sell) async {
-        List payment =
-        await PaymentDatabase().get(sell['id'], allColumns: true);
-        var paidAmount = 0.0;
-        var returnAmount = 0.0;
-        payment.forEach((element) {
-          if (element['is_return'] == 0) {
-            paidAmount += element['amount'];
-            payments
-                .add({'key': element['method'], 'value': element['amount']});
-          } else {
-            returnAmount += element['amount'];
-          }
-        });
-        totalSalesAmount = (totalSalesAmount + sell['invoice_amount']);
-        totalReceivedAmount =
-        (totalReceivedAmount + (paidAmount - returnAmount));
-        totalDueAmount = (totalDueAmount + sell['pending_amount']);
+    // Calculate totals outside of setState to avoid async issues
+    double tempTotalSalesAmount = 0.0;
+    double tempTotalReceivedAmount = 0.0;
+    double tempTotalDueAmount = 0.0;
+    List<Map> tempPayments = [];
+
+    for (var sell in result) {
+      List payment = await PaymentDatabase().get(sell['id'], allColumns: true);
+      var paidAmount = 0.0;
+      var returnAmount = 0.0;
+
+      payment.forEach((element) {
+        if (element['is_return'] == 0) {
+          paidAmount += element['amount'];
+          tempPayments.add({'key': element['method'], 'value': element['amount']});
+        } else {
+          returnAmount += element['amount'];
+        }
       });
+
+      tempTotalSalesAmount += sell['invoice_amount'];
+      tempTotalReceivedAmount += (paidAmount - returnAmount);
+      tempTotalDueAmount += sell['pending_amount'];
+    }
+
+    // Update state variables
+    setState(() {
+      totalSalesAmount = tempTotalSalesAmount;
+      totalReceivedAmount = tempTotalReceivedAmount;
+      totalDueAmount = tempTotalDueAmount;
+      payments = tempPayments;
     });
 
+    print('Total sales count: $totalSales');
     print('Daily sales count for $today: $dailySalesCount');
     return result;
   }
@@ -757,7 +778,18 @@ class _HomeState extends State<Home> {
     });
 
     await loadStatistics().then((value) {
-      Future.delayed(Duration(seconds: 1), () {
+      // Reset payment totals
+      byCash = 0.0;
+      byCard = 0.0;
+      byCheque = 0.0;
+      byBankTransfer = 0.0;
+      byOther = 0.0;
+      byCustomPayment_1 = 0.0;
+      byCustomPayment_2 = 0.0;
+      byCustomPayment_3 = 0.0;
+      method.clear(); // Clear existing method list
+
+      Future.delayed(Duration(milliseconds: 500), () {
         payments.forEach((row) {
           if (row['key'] == 'cash') {
             byCash += row['value'];
@@ -784,6 +816,7 @@ class _HomeState extends State<Home> {
             byCustomPayment_3 += row['value'];
           }
         });
+
         paymentMethod.forEach((row) {
           if (byCash > 0 && row['key'] == 'cash')
             method.add({'key': row['value'], 'value': byCash});
@@ -802,6 +835,7 @@ class _HomeState extends State<Home> {
           if (byCustomPayment_3 > 0 && row['key'] == 'custom_pay_3')
             method.add({'key': row['value'], 'value': byCustomPayment_3});
         });
+
         if (this.mounted) {
           setState(() {});
         }
