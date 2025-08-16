@@ -1,233 +1,235 @@
-import 'dart:async';
 
 import 'package:flutter/material.dart';
-import '../../../locale/MyLocalizations.dart';
 
-class GreetingWidget extends StatefulWidget implements PreferredSizeWidget {
+class GreetingWidget extends StatefulWidget {
+  final ThemeData themeData;
+  final String userName;
+
   const GreetingWidget({
     Key? key,
     required this.themeData,
     required this.userName,
-    this.onProfileTap,
   }) : super(key: key);
-
-  final ThemeData themeData;
-  final String userName;
-  final VoidCallback? onProfileTap;
-  static const double _kHeight = 100.0; // Increased height to accommodate date/time
 
   @override
   State<GreetingWidget> createState() => _GreetingWidgetState();
-
-  @override
-  Size get preferredSize => const Size.fromHeight(_kHeight);
 }
 
-class _GreetingWidgetState extends State<GreetingWidget> {
-  late DateTime _currentTime;
-  late Timer _timer;
+class _GreetingWidgetState extends State<GreetingWidget>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  late Animation<double> _slideAnimation;
+  late Animation<double> _fadeAnimation;
 
   @override
   void initState() {
     super.initState();
-    _currentTime = DateTime.now();
-    // Update time every minute
-    _timer = Timer.periodic(const Duration(minutes: 1), (timer) {
-      setState(() {
-        _currentTime = DateTime.now();
-      });
-    });
+    _animationController = AnimationController(
+      duration: Duration(milliseconds: 1000),
+      vsync: this,
+    );
+
+    _slideAnimation = Tween<double>(
+      begin: 30.0,
+      end: 0.0,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOut,
+    ));
+
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeIn,
+    ));
+
+    _animationController.forward();
   }
 
   @override
   void dispose() {
-    _timer.cancel();
+    _animationController.dispose();
     super.dispose();
   }
 
   String _getGreeting() {
-    final hour = _currentTime.hour;
-
-    if (hour < 5) {
-      return AppLocalizations.of(context).translate('good_evening');
-    } else if (hour < 12) {
-      return AppLocalizations.of(context).translate('good_morning');
+    final hour = DateTime.now().hour;
+    if (hour < 12) {
+      return 'Good Morning';
     } else if (hour < 17) {
-      return AppLocalizations.of(context).translate('good_afternoon');
+      return 'Good Afternoon';
     } else {
-      return AppLocalizations.of(context).translate('good_evening');
+      return 'Good Evening';
     }
   }
 
-  IconData _getTimeBasedIcon() {
-    final hour = _currentTime.hour;
-    if (hour < 5) {
-      return Icons.nightlight_round;
-    } else if (hour < 12) {
-      return Icons.wb_sunny;
+  String _getGreetingEmoji() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) {
+      return '🌅';
     } else if (hour < 17) {
-      return Icons.wb_cloudy;
+      return '☀️';
     } else {
-      return Icons.brightness_3;
+      return '🌆';
     }
-  }
-
-  Color _getTimeBasedIconColor() {
-    final hour = _currentTime.hour;
-    if (hour < 5) {
-      return Colors.blueGrey[200]!;
-    } else if (hour < 12) {
-      return Colors.amber[600]!;
-    } else if (hour < 17) {
-      return Colors.blueGrey[400]!;
-    } else {
-      return Colors.indigo[200]!;
-    }
-  }
-
-  String _getFormattedDate() {
-    return '${_currentTime.day}/${_currentTime.month}/${_currentTime.year}';
-  }
-
-  String _getFormattedTime() {
-    final hour = _currentTime.hour;
-    final minute = _currentTime.minute;
-    return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Material(
-        elevation: 6,
-        borderRadius: BorderRadius.circular(20),
-        shadowColor: widget.themeData.colorScheme.primary.withOpacity(0.8),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: widget.onProfileTap,
-          highlightColor: Colors.white.withOpacity(0.2),
-          splashColor: Colors.white.withOpacity(0.3),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  widget.themeData.colorScheme.primary.withOpacity(0.8),
-                  widget.themeData.colorScheme.primary.withOpacity(0.7),
-                  widget.themeData.colorScheme.secondary.withOpacity(0.8),
-                ],
-                stops: const [0.1, 0.6, 1.0],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: widget.themeData.colorScheme.primary.withOpacity(0.3),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                // Avatar
-                Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.8),
-                      width: 2,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: widget.themeData.colorScheme.primary,
-                        blurRadius: 10,
-                        spreadRadius: 1,
-                      ),
-                    ],
-                  ),
-                  child: CircleAvatar(
-                    radius: 22,
-                    backgroundColor: Colors.white,
-                    child: Text(
-                      widget.userName.isNotEmpty
-                          ? widget.userName[0].toUpperCase()
-                          : '?',
-                      style: TextStyle(
-                        color: widget.themeData.colorScheme.primary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-
-                // Greeting text
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _getGreeting(),
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.9),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        widget.userName,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                          height: 1.2,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _getFormattedDate(),
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.8),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Time and icon column
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _getFormattedTime(),
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Icon(
-                      _getTimeBasedIcon(),
-                      size: 24,
-                      color: _getTimeBasedIconColor(),
-                    ),
+    return AnimatedBuilder(
+      animation: _animationController,
+      builder: (context, child) {
+        return Transform.translate(
+          offset: Offset(0, _slideAnimation.value),
+          child: Opacity(
+            opacity: _fadeAnimation.value,
+            child: Container(
+              padding: EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    widget.themeData.colorScheme.primary.withOpacity(0.1),
+                    widget.themeData.colorScheme.secondary.withOpacity(0.05),
                   ],
                 ),
-              ],
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: widget.themeData.colorScheme.primary.withOpacity(0.1),
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  // Avatar Section
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          widget.themeData.colorScheme.primary,
+                          widget.themeData.colorScheme.primary.withOpacity(0.8),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(30),
+                      boxShadow: [
+                        BoxShadow(
+                          color: widget.themeData.colorScheme.primary.withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Text(
+                        widget.userName.isNotEmpty 
+                            ? widget.userName[0].toUpperCase()
+                            : 'U',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  
+                  SizedBox(width: 16),
+                  
+                  // Greeting Text Section
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              _getGreeting(),
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              _getGreetingEmoji(),
+                              style: TextStyle(fontSize: 18),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          widget.userName.isNotEmpty 
+                              ? widget.userName
+                              : 'Welcome back!',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: widget.themeData.colorScheme.primary,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.calendar_today,
+                              size: 14,
+                              color: Colors.grey.shade600,
+                            ),
+                            SizedBox(width: 4),
+                            Text(
+                              _formatDate(DateTime.now()),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  // Weather/Status Icon
+                  Container(
+                    padding: EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 4,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      Icons.trending_up,
+                      color: Colors.green,
+                      size: 20,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
+  }
+
+  String _formatDate(DateTime date) {
+    final months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    
+    return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }
 }

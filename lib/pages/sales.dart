@@ -70,22 +70,26 @@ class _SalesState extends State<Sales> with TickerProviderStateMixin {
     _tabController = TabController(length: 2, vsync: this);
 
     // Initialize offline manager first
-    _initializeOfflineManager();
+    _initializeOfflineManager().then((_) {
+      // Set up other components
+      setCustomers();
+      setLocations();
+      
+      // Load cached data first for immediate display
+      loadLocalSells();
+      loadCachedAllSales();
+      
+      // Then check connectivity and sync if possible
+      _checkConnectivityAndSync();
+    });
 
-    setCustomers();
-    setLocations();
-    // Load local sells first for offline mode - always show cached data
-    loadLocalSells();
-    // Load cached all sales data for All Sales tab
-    loadCachedAllSales();
-    // Only attempt sync if we have connectivity
-    _checkConnectivityAndSync();
     _scrollController.addListener(() {
       if (_scrollController.position.pixels ==
           _scrollController.position.maxScrollExtent) {
         setAllSalesList();
       }
     });
+    
     Helper().syncCallLogs();
   }
 
@@ -98,20 +102,13 @@ class _SalesState extends State<Sales> with TickerProviderStateMixin {
     }
   }
 
-  // Load local sales data from cache for offline mode
+  // IMPROVED LOAD LOCAL SELLS - Better error handling
   Future<void> loadLocalSells() async {
     try {
-      // First try to load from cache
-      List<Map<String, dynamic>> cachedSales = await OfflineManager().getCachedSales();
+      // Always load cached data first for immediate display
+      await loadCachedSalesData();
 
-      // If we have cached data, display it immediately
-      if (cachedSales.isNotEmpty) {
-        setState(() {
-          sellList = cachedSales;
-        });
-      }
-
-      // Always also load from local database to get the most recent local data
+      // Then load from local database to get the most recent local data
       await sells();
 
     } catch (e) {
@@ -121,8 +118,8 @@ class _SalesState extends State<Sales> with TickerProviderStateMixin {
         await sells();
       } catch (dbError) {
         print('Error loading from database: $dbError');
-        // Show empty state with appropriate message
-        if (mounted) {
+        // Show empty state with appropriate message only if we truly have no data
+        if (mounted && sellList.isEmpty) {
           setState(() {
             sellList = [];
           });
@@ -131,26 +128,78 @@ class _SalesState extends State<Sales> with TickerProviderStateMixin {
     }
   }
 
-  // Check connectivity before attempting sync
+  // NEW METHOD: Load cached sales data
+  Future<void> loadCachedSalesData() async {
+    try {
+      List<Map<String, dynamic>> cachedSales = await OfflineManager().getCachedSales();
+      if (cachedSales.isNotEmpty && mounted) {
+        setState(() {
+          sellList = cachedSales;
+        });
+      }
+    } catch (e) {
+      print('Error loading cached sales data: $e');
+    }
+  }
+
+  // NEW METHOD: Cache current sales data
+  Future<void> cacheSalesData(List salesData) async {
+    try {
+      // Convert to proper format for caching
+      List<Map<String, dynamic>> salesForCache = salesData.map((sale) {
+        if (sale is Map<String, dynamic>) {
+          return sale;
+        } else {
+          return Map<String, dynamic>.from(sale);
+        }
+      }).toList();
+
+      await OfflineManager().cacheSales(salesForCache);
+    } catch (e) {
+      print('Error caching sales data: $e');
+    }
+  }
+
+  // IMPROVED CHECK CONNECTIVITY AND SYNC
   Future<void> _checkConnectivityAndSync() async {
     bool hasConnectivity = await Helper().checkConnectivity();
-
+    
     if (hasConnectivity && synced) {
       // Only sync if we have internet and system is marked as synced
-      refreshSales();
+      try {
+        await refreshSales();
+        // Optionally also refresh all sales if needed
+        // await _refreshAllSales();
+      } catch (e) {
+        print('Initial sync failed: $e');
+        // Fall back to cached data
+        await loadCachedSalesData();
+        await loadCachedAllSales();
+      }
     } else if (!hasConnectivity) {
+      // Load cached data immediately for offline mode
+      await loadCachedSalesData();
+      await loadCachedAllSales();
+      
       // Check if we have any cached data before showing message
-      bool hasCachedData = sellList.isNotEmpty || allSalesListMap.isNotEmpty;
+      bool hasCachedRecentSales = sellList.isNotEmpty;
+      bool hasCachedAllSales = allSalesListMap.isNotEmpty;
+      bool hasAnyCachedData = hasCachedRecentSales || hasCachedAllSales;
 
       // Show appropriate message based on cached data availability
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(hasCachedData
+            content: Text(hasAnyCachedData
                 ? 'Offline mode - Showing cached data'
                 : 'No internet connection. No cached data available. Please connect to internet and try again.'),
-            backgroundColor: hasCachedData ? Colors.orange : Colors.red,
-            duration: Duration(seconds: hasCachedData ? 2 : 4),
+            backgroundColor: hasAnyCachedData ? Colors.orange : Colors.red,
+            duration: Duration(seconds: hasAnyCachedData ? 2 : 4),
+            action: !hasAnyCachedData ? SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: () => _checkConnectivityAndSync(),
+            ) : null,
           ),
         );
       }
@@ -1203,7 +1252,7 @@ class _SalesState extends State<Sales> with TickerProviderStateMixin {
     );
   }
 
-  // IMPROVED SYNC METHOD - Don't clear cache until successful sync
+  // IMPROVED HANDLE SYNC - Better cache preservation
   void _handleSync() async {
     bool hasConnectivity = await Helper().checkConnectivity();
 
@@ -1219,16 +1268,25 @@ class _SalesState extends State<Sales> with TickerProviderStateMixin {
 
     setState(() => isLoading = true);
 
+    // Preserve current cache during sync attempt
+    List currentSellList = List.from(sellList);
+    List<Map<dynamic, dynamic>> currentAllSalesList = List.from(allSalesListMap);
+
     try {
-      // Force sync from server first - don't clear cache until this succeeds
+      // Force sync from server
       await Sell().createApiSell(syncAll: true);
 
-      // Only refresh local data after successful sync
+      // Refresh local data after successful sync
       if (mounted) {
         setState(() {
           synced = true;
         });
         await sells();
+        
+        // Cache the fresh data
+        if (sellList.isNotEmpty) {
+          await cacheSalesData(sellList);
+        }
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1239,6 +1297,15 @@ class _SalesState extends State<Sales> with TickerProviderStateMixin {
       );
     } catch (e) {
       print('Sync failed: $e');
+      
+      // Restore previous cache on sync failure
+      if (mounted) {
+        setState(() {
+          sellList = currentSellList;
+          allSalesListMap = currentAllSalesList;
+        });
+      }
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('${AppLocalizations.of(context).translate('sync_failed')}: ${e.toString()}'),
@@ -1333,7 +1400,7 @@ class _SalesState extends State<Sales> with TickerProviderStateMixin {
     onFilter();
   }
 
-  // OPTIMIZED REFRESH ALL SALES - With intelligent caching
+  // IMPROVED REFRESH ALL SALES - Better cache management
   Future<void> _refreshAllSales() async {
     if (_isRefreshing || !mounted) return;
 
@@ -1342,39 +1409,75 @@ class _SalesState extends State<Sales> with TickerProviderStateMixin {
     });
 
     try {
-      // Always load cached data first for immediate display
-      await loadCachedAllSales();
-
-      // Check internet connectivity for fresh data
+      // Check connectivity first
       bool hasConnectivity = await Helper().checkConnectivity();
 
       if (hasConnectivity) {
-        // Reset pagination and fetch fresh data
-        setState(() {
-          changeUrl = true; // This will replace the list instead of appending
-          allSalesListMap = []; // Clear for fresh data
-        });
-        await onFilter();
+        // Try to fetch fresh data
+        try {
+          // Reset pagination for fresh data - but keep existing cache visible
+          String originalNextPage = nextPage ?? '';
+          setState(() {
+            changeUrl = true; // This will replace the list instead of appending
+          });
+          
+          // Attempt to fetch fresh data
+          await onFilter();
+          
+          // If successful and we have data, cache it
+          if (allSalesListMap.isNotEmpty) {
+            await cacheAllSalesData(allSalesListMap);
+          }
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Sales data refreshed successfully'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        } catch (e) {
+          print('Failed to fetch fresh all sales data: $e');
+          // On failure, restore cached data
+          await loadCachedAllSales();
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to refresh. Showing cached data.'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+        }
       } else {
-        // No internet, show message but use cached data
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(allSalesListMap.isEmpty
-                ? 'No internet connection. No cached data available.'
-                : 'Offline mode - Showing cached data'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 2),
-          ),
-        );
+        // No internet - load cached data
+        await loadCachedAllSales();
+        
+        if (mounted) {
+          bool hasData = allSalesListMap.isNotEmpty;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(hasData
+                  ? 'Offline mode - Showing cached data'
+                  : 'No internet connection and no cached data available'),
+              backgroundColor: hasData ? Colors.orange : Colors.red,
+              duration: Duration(seconds: hasData ? 2 : 4),
+              action: !hasData ? SnackBarAction(
+                label: 'Retry',
+                textColor: Colors.white,
+                onPressed: () => _refreshAllSales(),
+              ) : null,
+            ),
+          );
+        }
       }
     } catch (e) {
-      print('Refresh failed: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Refresh failed. Showing cached data if available.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      print('Refresh all sales error: $e');
+      // Ensure we try to load cached data even on error
+      await loadCachedAllSales();
     } finally {
       if (mounted) {
         setState(() => _isRefreshing = false);
@@ -1557,7 +1660,7 @@ class _SalesState extends State<Sales> with TickerProviderStateMixin {
     );
   }
 
-  // IMPROVED REFRESH SALES - Don't clear cache until connectivity check
+  // IMPROVED REFRESH SALES - Better cache management
   Future<void> refreshSales() async {
     if (_isRefreshing || !mounted) return;
 
@@ -1566,33 +1669,79 @@ class _SalesState extends State<Sales> with TickerProviderStateMixin {
     });
 
     try {
-      // Check internet connectivity before clearing cache
+      // First check connectivity without clearing cache
       bool hasConnectivity = await Helper().checkConnectivity();
-
+      
       if (hasConnectivity) {
-        // Only clear cache if we have internet connection
-        setState(() {
-          sellList = [];
-        });
-        await sells();
+        // Only attempt fresh data fetch if we have connectivity
+        try {
+          // Keep existing cache visible during refresh
+          await sells(); // This will update with fresh data if successful
+          
+          // Cache the fresh data for offline use
+          if (sellList.isNotEmpty) {
+            await cacheSalesData(sellList);
+          }
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Sales data refreshed successfully'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        } catch (e) {
+          print('Failed to fetch fresh data: $e');
+          // On failure, ensure we still have cached data displayed
+          await loadCachedSalesData();
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to refresh. Showing cached data.'),
+                backgroundColor: Colors.orange,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        }
       } else {
-        // No internet, show message but reload from existing cache
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('No internet connection. Showing cached data.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        await sells();
+        // No internet - load from cache without clearing
+        await loadCachedSalesData();
+        
+        if (mounted) {
+          bool hasData = sellList.isNotEmpty;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(hasData 
+                  ? 'Offline mode - Showing cached data' 
+                  : 'No internet connection and no cached data available'),
+              backgroundColor: hasData ? Colors.orange : Colors.red,
+              duration: Duration(seconds: hasData ? 2 : 4),
+              action: !hasData ? SnackBarAction(
+                label: 'Retry',
+                textColor: Colors.white,
+                onPressed: () => refreshSales(),
+              ) : null,
+            ),
+          );
+        }
       }
     } catch (e) {
-      print('Refresh failed: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Refresh failed. Please try again.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      print('Refresh error: $e');
+      // Ensure we try to load cached data even on error
+      await loadCachedSalesData();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error occurred. Showing cached data if available.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() => _isRefreshing = false);
@@ -1600,61 +1749,70 @@ class _SalesState extends State<Sales> with TickerProviderStateMixin {
     }
   }
 
-  // IMPROVED SELLS METHOD - Don't clear cache unnecessarily
+  // IMPROVED SELLS METHOD - Better cache integration
   sells() async {
-    // Only clear existing list if we're doing a full refresh from connectivity check
-    // For regular loads, append or replace carefully
+    try {
+      var salesFromDb = await SellDatabase().getSells(all: true);
+      List newSellList = [];
 
-    var salesFromDb = await SellDatabase().getSells(all: true);
-    List newSellList = [];
+      for (var element in salesFromDb) {
+        if (element['is_synced'] == 0 && mounted) {
+          setState(() {
+            synced = false;
+          });
+        }
+        var customerDetail = await Contact().getCustomerDetailById(element['contact_id']);
+        var locationName = await Helper().getLocationNameById(element['location_id']);
 
-    for (var element in salesFromDb) {
-      if (element['is_synced'] == 0 && mounted) {
-        setState(() {
-          synced = false;
+        newSellList.add({
+          'id': element['id'],
+          'transaction_date': element['transaction_date'],
+          'invoice_no': element['invoice_no'],
+          'customer_name': customerDetail != null ? customerDetail['name'] : 'N/A',
+          'mobile': customerDetail != null ? customerDetail['mobile'] : '',
+          'contact_id': element['contact_id'],
+          'location_id': element['location_id'],
+          'location_name': locationName ?? 'N/A',
+          'status': element['status'],
+          'tax_rate_id': element['tax_rate_id'],
+          'discount_amount': element['discount_amount'],
+          'discount_type': element['discount_type'],
+          'sale_note': element['sale_note'],
+          'staff_note': element['staff_note'],
+          'invoice_amount': element['invoice_amount'],
+          'pending_amount': element['pending_amount'],
+          'is_synced': element['is_synced'],
+          'is_quotation': element['is_quotation'],
+          'invoice_url': element['invoice_url'],
+          'transaction_id': element['transaction_id']
         });
       }
-      var customerDetail = await Contact().getCustomerDetailById(element['contact_id']);
-      var locationName = await Helper().getLocationNameById(element['location_id']);
 
-      newSellList.add({
-        'id': element['id'],
-        'transaction_date': element['transaction_date'],
-        'invoice_no': element['invoice_no'],
-        'customer_name': customerDetail != null ? customerDetail['name'] : 'N/A',
-        'mobile': customerDetail != null ? customerDetail['mobile'] : '',
-        'contact_id': element['contact_id'],
-        'location_id': element['location_id'],
-        'location_name': locationName ?? 'N/A',
-        'status': element['status'],
-        'tax_rate_id': element['tax_rate_id'],
-        'discount_amount': element['discount_amount'],
-        'discount_type': element['discount_type'],
-        'sale_note': element['sale_note'],
-        'staff_note': element['staff_note'],
-        'invoice_amount': element['invoice_amount'],
-        'pending_amount': element['pending_amount'],
-        'is_synced': element['is_synced'],
-        'is_quotation': element['is_quotation'],
-        'invoice_url': element['invoice_url'],
-        'transaction_id': element['transaction_id']
-      });
-    }
-
-    // Only update sellList after we have the complete new list
-    if (mounted) {
-      setState(() {
-        sellList = newSellList;
-      });
-    }
-
-    await Helper().getFormattedBusinessDetails().then((value) {
+      // Update sellList with the new data
       if (mounted) {
         setState(() {
-          symbol = value['symbol'];
+          sellList = newSellList;
         });
+        
+        // Cache the data for offline use (only if we have data)
+        if (newSellList.isNotEmpty) {
+          await cacheSalesData(newSellList);
+        }
       }
-    });
+
+      // Get currency symbol
+      await Helper().getFormattedBusinessDetails().then((value) {
+        if (mounted) {
+          setState(() {
+            symbol = value['symbol'];
+          });
+        }
+      });
+    } catch (e) {
+      print('Error in sells(): $e');
+      // On error, try to load cached data
+      await loadCachedSalesData();
+    }
   }
 
   // IMPROVED ON FILTER - Don't clear cache until we check connectivity

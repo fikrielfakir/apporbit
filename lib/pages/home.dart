@@ -55,6 +55,8 @@ class _HomeState extends State<Home> {
       byCustomPayment_2 = 0.00,
       byCustomPayment_3 = 0.00;
 
+  int dailySalesCount = 0;
+
   bool accessExpenses = false,
       attendancePermission = false,
       notPermitted = false,
@@ -211,6 +213,12 @@ class _HomeState extends State<Home> {
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
+                    _buildStatCard(
+                      title: AppLocalizations.of(context).translate('daily_sales'),
+                      value: '$dailySalesCount',
+                      icon: Icons.today,
+                      color: Color(0xff673AB7),
+                    ),
                     _buildStatCard(
                       title: AppLocalizations.of(context).translate('number_of_sales'),
                       value: '$totalSales',
@@ -695,6 +703,23 @@ class _HomeState extends State<Home> {
   Future<List> loadStatistics() async {
     List result = await SellDatabase().getSells();
     totalSales = result.length;
+
+    // Get today's date for daily sales calculation
+    String today = DateTime.now().toIso8601String().split('T')[0];
+
+    // Calculate daily sales count
+    int dailySalesCount = 0;
+    result.forEach((sell) {
+      if (sell['transaction_date'] != null) {
+        String sellDate = sell['transaction_date'].toString().split(' ')[0]; // Extract date part
+        if (sellDate == today && sell['is_quotation'] == 0) {
+          dailySalesCount++;
+        }
+      }
+    });
+
+    this.dailySalesCount = dailySalesCount;
+
     setState(() {
       result.forEach((sell) async {
         List payment =
@@ -716,6 +741,8 @@ class _HomeState extends State<Home> {
         totalDueAmount = (totalDueAmount + sell['pending_amount']);
       });
     });
+
+    print('Daily sales count for $today: $dailySalesCount');
     return result;
   }
 

@@ -1,4 +1,3 @@
-
 import 'dart:convert';
 
 import 'package:sqflite/sqflite.dart';
@@ -211,7 +210,7 @@ class SellDatabase {
 
   // Enhanced get products by sell ID with proper stock information
   Future<List<Map<String, dynamic>>> getProductsBySellId(int sellId) async {
-    final db = await dbProvider.database;
+    final db = await DbProvider.db.database;
     try {
       List<Map<String, dynamic>> result = await db.rawQuery('''
         SELECT sl.*, p.name as name, p.enable_stock, vld.qty_available
@@ -231,7 +230,7 @@ class SellDatabase {
 
   // Enhanced get sell return products with names
   Future<List<Map<String, dynamic>>> getSellReturnProductsWithNames(int sellReturnId) async {
-    final db = await dbProvider.database;
+    final db = await DbProvider.db.database;
     try {
       final sellReturn = await getSellReturnById(sellReturnId);
 
@@ -263,7 +262,7 @@ class SellDatabase {
   }
 
   Future<List<Map<String, dynamic>>> getSellReturnDetails(int sellReturnId) async {
-    final db = await dbProvider.database;
+    final db = await DbProvider.db.database;
     try {
       return await db.rawQuery('''
         SELECT sr.*, p.name as product_name
@@ -279,7 +278,7 @@ class SellDatabase {
 
   // Enhanced get sell lines with validation
   Future<List> getSellLines(sellId) async {
-    final db = await dbProvider.database;
+    final db = await DbProvider.db.database;
     try {
       var response = await db.query('sell_lines',
           columns: [
@@ -704,7 +703,7 @@ class SellDatabase {
 
   // Get sell returns with validation
   Future<List<Map<String, dynamic>>> getSellReturns() async {
-    final db = await dbProvider.database;
+    final db = await DbProvider.db.database;
     try {
       var result = await db.query('sell_return');
       print('Sell Returns from DB: $result');
@@ -717,7 +716,7 @@ class SellDatabase {
 
   // Get sell return by ID
   Future<List<Map<String, dynamic>>> getSellReturnById(int sellReturnId) async {
-    final db = await dbProvider.database;
+    final db = await DbProvider.db.database;
     try {
       return await db.query('sell_return', where: 'id = ?', whereArgs: [sellReturnId]);
     } catch (e) {
@@ -728,11 +727,101 @@ class SellDatabase {
 
   // Get not synced sell returns
   Future<List<Map<String, dynamic>>> getNotSyncedSellReturns() async {
-    final db = await dbProvider.database;
+    final db = await DbProvider.db.database;
     try {
       return await db.query('sell_return', where: 'is_synced = 0');
     } catch (e) {
       print('Error getting not synced sell returns: $e');
+      return [];
+    }
+  }
+
+  // Get sales by date range for daily sales card
+  Future<List<Map<String, dynamic>>> getSalesByDateRange(String startDate, String endDate) async {
+    final db = await DbProvider.db.database;
+    try {
+      // Query sales within the date range
+      var result = await db.query(
+        'sell',
+        where: 'transaction_date >= ? AND transaction_date <= ? AND is_quotation = 0',
+        whereArgs: [startDate, endDate],
+        orderBy: 'transaction_date DESC',
+      );
+      return result;
+    } catch (e) {
+      print('Error getting sales by date range: $e');
+      return [];
+    }
+  }
+
+  // Get daily sales summary (count and total amount)
+  Future<Map<String, dynamic>> getDailySalesSummary(String date) async {
+    final db = await DbProvider.db.database;
+    try {
+      // Get sales count and total for the specific date
+      var result = await db.rawQuery('''
+        SELECT 
+          COUNT(*) as sales_count,
+          COALESCE(SUM(final_total), 0) as total_amount,
+          COALESCE(SUM(total_before_tax), 0) as subtotal_amount
+        FROM sell 
+        WHERE DATE(transaction_date) = ? AND is_quotation = 0
+      ''', [date]);
+
+      if (result.isNotEmpty) {
+        return {
+          'sales_count': result.first['sales_count'] ?? 0,
+          'total_amount': result.first['total_amount'] ?? 0.0,
+          'subtotal_amount': result.first['subtotal_amount'] ?? 0.0,
+        };
+      }
+
+      return {
+        'sales_count': 0,
+        'total_amount': 0.0,
+        'subtotal_amount': 0.0,
+      };
+    } catch (e) {
+      print('Error getting daily sales summary: $e');
+      return {
+        'sales_count': 0,
+        'total_amount': 0.0,
+        'subtotal_amount': 0.0,
+      };
+    }
+  }
+
+  // Get sales with pending payments
+  Future<List<Map<String, dynamic>>> getPendingPaymentSales() async {
+    final db = await DbProvider.db.database;
+    try {
+      // Query sales where payment is incomplete
+      var result = await db.rawQuery('''
+        SELECT s.*, 
+               COALESCE(s.final_total, 0) as total_amount,
+               COALESCE((
+                 SELECT SUM(sp.amount) 
+                 FROM sell_payments sp 
+                 WHERE sp.sell_id = s.id
+               ), 0) as paid_amount,
+               COALESCE(s.final_total, 0) - COALESCE((
+                 SELECT SUM(sp.amount) 
+                 FROM sell_payments sp 
+                 WHERE sp.sell_id = s.id
+               ), 0) as pending_amount
+        FROM sell s
+        WHERE s.is_quotation = 0 
+          AND (COALESCE(s.final_total, 0) - COALESCE((
+                 SELECT SUM(sp.amount) 
+                 FROM sell_payments sp 
+                 WHERE sp.sell_id = s.id
+               ), 0)) > 0
+        ORDER BY s.transaction_date DESC
+      ''');
+
+      return result;
+    } catch (e) {
+      print('Error getting pending payment sales: $e');
       return [];
     }
   }
