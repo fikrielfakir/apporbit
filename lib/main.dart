@@ -8,6 +8,8 @@ import 'config.dart';
 import 'helpers/AppTheme.dart';
 import 'helpers/routes.dart';
 import 'locale/MyLocalizations.dart';
+import 'models/offline_manager.dart';
+import 'models/offline_manager.dart';
 import 'pages/notifications/view_model_manger/notifications_cubit.dart';
 
 void main() async {
@@ -17,6 +19,10 @@ void main() async {
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   AppLanguage appLanguage = AppLanguage();
   await appLanguage.fetchLocale();
+
+  // Initialize offline manager
+  await OfflineManager().initialize();
+
   runApp(MyApp(
     appLanguage: appLanguage,
   ));

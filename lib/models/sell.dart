@@ -78,7 +78,7 @@ class Sell {
 
             if (result != null) {
               await SellDatabase().updateSells(element['id'], {
-                'is_synced': 1, 
+                'is_synced': 1,
                 'invoice_url': updatedResult['invoice_url']
               });
 
@@ -246,8 +246,8 @@ class Sell {
       //calculate unit price after considering tax
       double price = (product['tax_rate_id'] != 0 && product['tax_rate_id'] != null)
           ? await getUnitPrice(
-              double.parse(product['unit_price'].toString()),
-              product['tax_rate_id'])
+          double.parse(product['unit_price'].toString()),
+          product['tax_rate_id'])
           : double.parse(product['unit_price'].toString());
 
       var sellLine = {

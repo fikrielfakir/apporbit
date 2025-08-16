@@ -16,6 +16,7 @@ import '../helpers/SizeConfig.dart';
 import '../helpers/generators.dart';
 import '../helpers/otherHelpers.dart';
 import '../locale/MyLocalizations.dart';
+import '../models/database.dart';
 import '../models/product_model.dart';
 import '../models/sell.dart';
 import '../models/system.dart';
@@ -31,6 +32,7 @@ class _ProductsState extends State<Products> {
   List products = [];
   static int themeType = 1;
   ThemeData themeData = AppTheme.getThemeFromThemeMode(themeType);
+  late DbProvider dbProvider;
   bool changeLocation = false,
       changePriceGroup = false,
       canChangeLocation = true,
@@ -86,6 +88,7 @@ class _ProductsState extends State<Products> {
   @override
   initState() {
     super.initState();
+    dbProvider = DbProvider();
     getPermission();
 
 
@@ -202,7 +205,6 @@ class _ProductsState extends State<Products> {
 
 
   //Set location & product
-
   setInitDetails(selectedLocationId) async {
     var activeSubscriptionDetails = await System().get('active-subscription');
     if (activeSubscriptionDetails.length > 0) {
@@ -213,10 +215,11 @@ class _ProductsState extends State<Products> {
       Fluttertoast.showToast(
           msg: AppLocalizations.of(context).translate('no_subscription_found'));
     }
+
     await Helper().getFormattedBusinessDetails().then((value) {
       symbol = value['symbol'] + ' ';
     });
-    bool usePriceGroup = false;
+
     await setDefaultLocation(selectedLocationId).then((_) {
       bool hasGroup = locationListMap.any((element) =>
       element['id'] == selectedLocationId &&
@@ -226,8 +229,31 @@ class _ProductsState extends State<Products> {
         usePriceGroup = hasGroup;
       });
     });
-    products = [];
-    offset = 0;
+
+    // Reset pagination and products
+    setState(() {
+      products = [];
+      offset = 0;
+      hasReachedMax = false;
+    });
+
+    // Check connectivity and initialize data accordingly
+    bool hasConnectivity = await Helper().checkConnectivity();
+    if (hasConnectivity) {
+      print('Initial setup - Online mode');
+      // Force sync to ensure we have latest data
+      try {
+        await Variations().refresh();
+        await System().insertProductLastSyncDateTimeNow();
+        print('Data initialized successfully for offline use');
+      } catch (e) {
+        print('Error during initial data sync: $e');
+      }
+    } else {
+      print('Initial setup - Offline mode');
+    }
+
+    // Load products
     productList();
   }
 
@@ -258,43 +284,99 @@ class _ProductsState extends State<Products> {
       sellingPriceGroupId = 0;
     }
   }
-  //set product list
-  // In the productList() method around line 301, the error is with type assignment
 
-  productList() async {
-    if (_isDisposed || !mounted) return;
+  // Helper method to convert dynamic maps to String-keyed maps
+  List<Map<String, dynamic>> convertToStringKeyMapList(List<Map<dynamic, dynamic>> dynamicList) {
+    return dynamicList.map((item) {
+      Map<String, dynamic> convertedMap = {};
+      item.forEach((key, value) {
+        convertedMap[key.toString()] = value;
+      });
+      return convertedMap;
+    }).toList();
+  }
 
-    setState(() {
-      isLoading = true; // Activar el indicador de carga
-    });
-
+  // Calculate stock available for cached products (offline mode)
+  Future<int> _calculateStockAvailable(Map<String, dynamic> product) async {
     try {
-      offset++;
-      //check last sync, if difference is 10 minutes then sync again.
-      String? lastSync = await System().getProductLastSync();
-      final date2 = DateTime.now();
-      if (lastSync == null ||
-          (date2.difference(DateTime.parse(lastSync)).inMinutes > 10)) {
-        if (await Helper().checkConnectivity()) {
-          await Variations().refresh();
-          await System().insertProductLastSyncDateTimeNow();
-        }
+      // If stock is not enabled, return 9999 (unlimited)
+      if (product['enable_stock'] == 0) {
+        return 9999;
       }
 
+      // For offline mode, use the stock_available from the cached product if available
+      if (product['stock_available'] != null) {
+        return int.parse(product['stock_available'].toString());
+      }
+
+      // Fallback: Get base quantity from variations_location_details
+      int baseQty = 0;
+      if (product['qty_available'] != null) {
+        baseQty = double.parse(product['qty_available'].toString()).toInt();
+      }
+
+      // Try to get sold quantity from sell_lines for this location (with error handling)
+      try {
+        final db = await dbProvider.database;
+        String productLastSync = await System().getProductLastSync();
+
+        var soldQtyResult = await db.rawQuery('''
+          SELECT COALESCE(SUM(SL.quantity), 0) as sold_qty 
+          FROM sell_lines AS SL 
+          JOIN sell AS S ON SL.sell_id = S.id
+          WHERE (SL.is_completed = 0 OR S.transaction_date > ?) 
+          AND S.location_id = ? 
+          AND SL.variation_id = ? 
+          AND S.is_quotation = 0
+        ''', [productLastSync, selectedLocationId, product['variation_id']]);
+
+        int soldQty = 0;
+        if (soldQtyResult.isNotEmpty) {
+          soldQty = int.parse(soldQtyResult[0]['sold_qty'].toString());
+        }
+
+        // Calculate available stock
+        int stockAvailable = baseQty - soldQty;
+        return stockAvailable > 0 ? stockAvailable : 0;
+      } catch (dbError) {
+        print('Database error calculating stock: $dbError');
+        // Return base quantity if database query fails
+        return baseQty > 0 ? baseQty : 0;
+      }
+    } catch (e) {
+      print('Error calculating stock: $e');
+      return 0;
+    }
+  }
+
+  // Load products from cache for offline mode
+  Future<void> _loadProductsFromCache() async {
+    if (_isDisposed || !mounted) return;
+
+    print('Loading products from cache for offline mode');
+
+    try {
       findSellingPriceGroupId(selectedLocationId);
-      await Variations()
-          .get(
-          brandId: brandId,
-          categoryId: categoryId,
-          subCategoryId: subCategoryId,
-          inStock: inStock,
-          locationId: selectedLocationId,
-          searchTerm: searchController.text,
-          offset: offset,
-          byAlphabets: byAlphabets,
-          byPrice: byPrice)
-          .then((element) {
-        element.forEach((product) {
+
+      // Use the existing database query method but for cached data
+      final cachedProducts = await Variations().get(
+        brandId: brandId,
+        categoryId: categoryId,
+        subCategoryId: subCategoryId,
+        inStock: inStock,
+        locationId: selectedLocationId,
+        searchTerm: searchController.text,
+        offset: offset,
+        byAlphabets: byAlphabets,
+        byPrice: byPrice,
+      );
+
+      if (_isDisposed || !mounted) return;
+
+      if (cachedProducts.isNotEmpty) {
+        for (var product in cachedProducts) {
+          if (_isDisposed || !mounted) return;
+
           var price;
           if (product['selling_price_group'] != null) {
             jsonDecode(product['selling_price_group']).forEach((element) {
@@ -303,22 +385,169 @@ class _ProductsState extends State<Products> {
               }
             });
           }
+
           if (_isDisposed || !mounted) return;
           setState(() {
             products.add(ProductModel().product(product, price));
           });
+        }
+
+        // Check if we reached the end based on page size
+        if (cachedProducts.length < 10) { // Less than expected page size
+          setState(() {
+            hasReachedMax = true;
+          });
+        }
+      } else {
+        // Check if this is the first page or we have no data at all
+        if (offset == 1) {
+          // No cached products available at all
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('${AppLocalizations.of(context).translate("no_products_found")} - Please connect to internet to sync data'),
+                backgroundColor: Colors.orange,
+                duration: Duration(seconds: 5),
+              ),
+            );
+          }
+        }
+
+        if (_isDisposed || !mounted) return;
+        setState(() {
+          hasReachedMax = true;
         });
-      });
+      }
+    } catch (e) {
+      print('Error loading products from cache: $e');
+
+      // Show error message to user
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading offline data: ${e.toString()}'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
 
       if (_isDisposed || !mounted) return;
       setState(() {
-        isLoading = false; // Desactivar el indicador de carga
+        hasReachedMax = true;
       });
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
+  }
+
+  //set product list
+  productList() async {
+    if (_isDisposed || !mounted) return;
+
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      offset++;
+
+      // Check connectivity first
+      bool hasConnectivity = await Helper().checkConnectivity();
+
+      if (hasConnectivity) {
+        // Online mode - fetch fresh data and update cache
+        try {
+          print('Online mode - fetching fresh data');
+
+          // Check last sync, if difference is 10 minutes then sync again
+          String? lastSync = await System().getProductLastSync();
+          final date2 = DateTime.now();
+          bool needsSync = lastSync == null ||
+              (date2.difference(DateTime.parse(lastSync)).inMinutes > 10);
+
+          // Initialize/refresh data when online
+          if (needsSync || offset == 1) {
+            print('Syncing product data...');
+            await Variations().refresh();
+            await System().insertProductLastSyncDateTimeNow();
+          }
+
+          findSellingPriceGroupId(selectedLocationId);
+
+          // Get products from database (which now has fresh data)
+          await Variations()
+              .get(
+              brandId: brandId,
+              categoryId: categoryId,
+              subCategoryId: subCategoryId,
+              inStock: inStock,
+              locationId: selectedLocationId,
+              searchTerm: searchController.text,
+              offset: offset,
+              byAlphabets: byAlphabets,
+              byPrice: byPrice)
+              .then((element) {
+            if (element.isEmpty && offset > 1) {
+              setState(() {
+                hasReachedMax = true;
+              });
+              return;
+            }
+
+            element.forEach((product) {
+              var price;
+              if (product['selling_price_group'] != null) {
+                jsonDecode(product['selling_price_group']).forEach((element) {
+                  if (element['key'] == sellingPriceGroupId) {
+                    price = double.parse(element['value'].toString());
+                  }
+                });
+              }
+              if (_isDisposed || !mounted) return;
+              setState(() {
+                products.add(ProductModel().product(product, price));
+              });
+            });
+
+            if (element.length < 10) { // Less than expected page size
+              setState(() {
+                hasReachedMax = true;
+              });
+            }
+          });
+
+          if (_isDisposed || !mounted) return;
+          setState(() {
+            isLoading = false;
+          });
+
+        } catch (networkError) {
+          print('Network error, falling back to offline mode: $networkError');
+          // If online mode fails, fallback to cached products
+          await _loadProductsFromCache();
+        }
+      } else {
+        print('No connectivity detected - using offline mode');
+        // Load from cache when offline
+        await _loadProductsFromCache();
+      }
+
     } catch (e) {
       print('Error loading products: $e');
       if (_isDisposed || !mounted) return;
       setState(() {
         isLoading = false;
+        // Show error message to user
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading products: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
       });
     }
   }

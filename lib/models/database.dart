@@ -144,85 +144,11 @@ class DbProvider {
               version: currVersion,
               onCreate: (db, version) async {
                 print("Creating new database with version $version");
-                await db.execute(createSystemTable);
-                await db.execute(createContactTable);
-                await db.execute(createVariationTable);
-                await db.execute(createVariationByLocationTable);
-                await db.execute(createProductAvailableInLocationTable);
-                await db.execute(createSellTable);
-                await db.execute(createSellLineTable);
-                await db.execute(createSellPaymentsTable);
-                await db.execute(createSellReturnTable);
+                await _createTables(db);
               },
               onUpgrade: (db, oldVersion, newVersion) async {
                 print("Upgrading database from version $oldVersion to $newVersion");
-
-                // Migration for version 1 to 2
-                if (oldVersion < 2) {
-                  await db.execute("ALTER TABLE sell_lines RENAME TO prev_sell_line;");
-                  await db.execute(createSellLineTable);
-                  await db.execute("INSERT INTO sell_lines SELECT * FROM prev_sell_line;");
-                }
-
-                // Migration for version 2 to 3
-                if (oldVersion < 3) {
-                  await db.execute("ALTER TABLE variations RENAME TO prev_variations;");
-                  await db.execute(createVariationTable);
-                  await db.execute("INSERT INTO variations SELECT * FROM prev_variations;");
-                }
-
-                // Migration for version 3 to 4
-                if (oldVersion < 4) {
-                  await db.execute(createContactTable);
-                }
-
-                // Migration for version 4 to 5
-                if (oldVersion < 5) {
-                  await db.execute("ALTER TABLE sell ADD COLUMN invoice_url TEXT DEFAULT null;");
-                }
-
-                // Migration for version 5 to 6
-                if (oldVersion < 6) {
-                  await db.execute("ALTER TABLE sell_payments ADD COLUMN account_id INTEGER DEFAULT null;");
-                }
-
-                // Migration for version 6 to 7
-                if (oldVersion < 7) {
-                  await db.execute("ALTER TABLE sell ADD COLUMN latitude REAL DEFAULT null;");
-                  await db.execute("ALTER TABLE sell ADD COLUMN longitude REAL DEFAULT null;");
-                }
-
-                // Migration for version 7 to 8
-                if (oldVersion < 8) {
-                  await db.execute(createSellReturnTable);
-                }
-
-                // Migration for version 8 to 9
-                if (oldVersion < 9) {
-                  await db.execute("ALTER TABLE sell_return ADD COLUMN sell_id INTEGER DEFAULT 0;");
-                }
-
-                // Migration for version 9 to 10
-                if (oldVersion < 10) {
-                  await db.execute("ALTER TABLE sell ADD COLUMN return_amount REAL DEFAULT 0.00;");
-                }
-
-                // Migration for version 10 to 11
-                if (oldVersion < 11) {
-                  await db.execute("ALTER TABLE contact ADD COLUMN first_name TEXT;");
-                  await db.execute("ALTER TABLE contact ADD COLUMN type TEXT;");
-                }
-
-                // Migration for version 11 to 12 (adding last_name column)
-                if (oldVersion < 12) {
-                  await db.execute("ALTER TABLE contact ADD COLUMN last_name TEXT;");
-                }
-                // Migration for version 12 to 13 (adding refrige_num column)
-                if (oldVersion < 13) {
-                  await db.execute("ALTER TABLE contact ADD COLUMN refrige_num TEXT;");
-                }
-
-                db.setVersion(currVersion);
+                await _upgradeTables(db, oldVersion, newVersion);
               },
             ));
       } else {
@@ -231,75 +157,11 @@ class DbProvider {
           version: currVersion,
           onCreate: (Database db, int version) async {
             print("Creating new database with version $version");
-            await db.execute(createSystemTable);
-            await db.execute(createContactTable);
-            await db.execute(createVariationTable);
-            await db.execute(createVariationByLocationTable);
-            await db.execute(createProductAvailableInLocationTable);
-            await db.execute(createSellTable);
-            await db.execute(createSellLineTable);
-            await db.execute(createSellPaymentsTable);
-            await db.execute(createSellReturnTable);
+            await _createTables(db);
           },
           onUpgrade: (db, oldVersion, newVersion) async {
             print("Upgrading database from version $oldVersion to $newVersion");
-
-            // Same migration logic as above for non-Windows/Linux platforms
-            if (oldVersion < 2) {
-              await db.execute("ALTER TABLE sell_lines RENAME TO prev_sell_line;");
-              await db.execute(createSellLineTable);
-              await db.execute("INSERT INTO sell_lines SELECT * FROM prev_sell_line;");
-            }
-
-            if (oldVersion < 3) {
-              await db.execute("ALTER TABLE variations RENAME TO prev_variations;");
-              await db.execute(createVariationTable);
-              await db.execute("INSERT INTO variations SELECT * FROM prev_variations;");
-            }
-
-            if (oldVersion < 4) {
-              await db.execute(createContactTable);
-            }
-
-            if (oldVersion < 5) {
-              await db.execute("ALTER TABLE sell ADD COLUMN invoice_url TEXT DEFAULT null;");
-            }
-
-            if (oldVersion < 6) {
-              await db.execute("ALTER TABLE sell_payments ADD COLUMN account_id INTEGER DEFAULT null;");
-            }
-
-            if (oldVersion < 7) {
-              await db.execute("ALTER TABLE sell ADD COLUMN latitude REAL DEFAULT null;");
-              await db.execute("ALTER TABLE sell ADD COLUMN longitude REAL DEFAULT null;");
-            }
-
-            if (oldVersion < 8) {
-              await db.execute(createSellReturnTable);
-            }
-
-            if (oldVersion < 9) {
-              await db.execute("ALTER TABLE sell_return ADD COLUMN sell_id INTEGER DEFAULT 0;");
-            }
-
-            if (oldVersion < 10) {
-              await db.execute("ALTER TABLE sell ADD COLUMN return_amount REAL DEFAULT 0.00;");
-            }
-
-            if (oldVersion < 11) {
-              await db.execute("ALTER TABLE contact ADD COLUMN first_name TEXT;");
-              await db.execute("ALTER TABLE contact ADD COLUMN type TEXT;");
-            }
-
-            if (oldVersion < 12) {
-              await db.execute("ALTER TABLE contact ADD COLUMN last_name TEXT;");
-            }
-
-            if (oldVersion < 13) {
-              await db.execute("ALTER TABLE contact ADD COLUMN refrige_num TEXT;");
-            }
-
-            db.setVersion(currVersion);
+            await _upgradeTables(db, oldVersion, newVersion);
           },
         );
       }
@@ -307,6 +169,106 @@ class DbProvider {
       print("Error initializing database: $e");
       rethrow;
     }
+  }
+
+  // Create tables for the database
+  _createTables(Database db) async {
+    await db.execute(
+        'CREATE TABLE IF NOT EXISTS attendance (id INTEGER PRIMARY KEY, user_id INTEGER, location_id INTEGER, clock_in_time TEXT, clock_out_time TEXT, work_hours INTEGER, is_synced INTEGER DEFAULT 0)');
+
+    // Offline cache tables
+    await db.execute(
+        'CREATE TABLE IF NOT EXISTS cached_products (id INTEGER PRIMARY KEY, product_data TEXT, cached_at INTEGER)');
+
+    await db.execute(
+        'CREATE TABLE IF NOT EXISTS cached_contacts (id INTEGER PRIMARY KEY, contact_data TEXT, cached_at INTEGER)');
+
+    await db.execute(
+        'CREATE TABLE IF NOT EXISTS cached_sales (id INTEGER PRIMARY KEY, sale_data TEXT, cached_at INTEGER)');
+
+    await db.execute(
+        'CREATE TABLE IF NOT EXISTS offline_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, action_type TEXT, action_data TEXT, created_at INTEGER, synced INTEGER DEFAULT 0)');
+
+    // Original table creations
+    await db.execute(createSystemTable);
+    await db.execute(createContactTable);
+    await db.execute(createVariationTable);
+    await db.execute(createVariationByLocationTable);
+    await db.execute(createProductAvailableInLocationTable);
+    await db.execute(createSellTable);
+    await db.execute(createSellLineTable);
+    await db.execute(createSellPaymentsTable);
+    await db.execute(createSellReturnTable);
+  }
+
+  // Upgrade tables in the database
+  _upgradeTables(Database db, int oldVersion, int newVersion) async {
+    // Migration for version 1 to 2
+    if (oldVersion < 2) {
+      await db.execute("ALTER TABLE sell_lines RENAME TO prev_sell_line;");
+      await db.execute(createSellLineTable);
+      await db.execute("INSERT INTO sell_lines SELECT * FROM prev_sell_line;");
+    }
+
+    // Migration for version 2 to 3
+    if (oldVersion < 3) {
+      await db.execute("ALTER TABLE variations RENAME TO prev_variations;");
+      await db.execute(createVariationTable);
+      await db.execute("INSERT INTO variations SELECT * FROM prev_variations;");
+    }
+
+    // Migration for version 3 to 4
+    if (oldVersion < 4) {
+      await db.execute(createContactTable);
+    }
+
+    // Migration for version 4 to 5
+    if (oldVersion < 5) {
+      await db.execute("ALTER TABLE sell ADD COLUMN invoice_url TEXT DEFAULT null;");
+    }
+
+    // Migration for version 5 to 6
+    if (oldVersion < 6) {
+      await db.execute("ALTER TABLE sell_payments ADD COLUMN account_id INTEGER DEFAULT null;");
+    }
+
+    // Migration for version 6 to 7
+    if (oldVersion < 7) {
+      await db.execute("ALTER TABLE sell ADD COLUMN latitude REAL DEFAULT null;");
+      await db.execute("ALTER TABLE sell ADD COLUMN longitude REAL DEFAULT null;");
+    }
+
+    // Migration for version 7 to 8
+    if (oldVersion < 8) {
+      await db.execute(createSellReturnTable);
+    }
+
+    // Migration for version 8 to 9
+    if (oldVersion < 9) {
+      await db.execute("ALTER TABLE sell_return ADD COLUMN sell_id INTEGER DEFAULT 0;");
+    }
+
+    // Migration for version 9 to 10
+    if (oldVersion < 10) {
+      await db.execute("ALTER TABLE sell ADD COLUMN return_amount REAL DEFAULT 0.00;");
+    }
+
+    // Migration for version 10 to 11
+    if (oldVersion < 11) {
+      await db.execute("ALTER TABLE contact ADD COLUMN first_name TEXT;");
+      await db.execute("ALTER TABLE contact ADD COLUMN type TEXT;");
+    }
+
+    // Migration for version 11 to 12 (adding last_name column)
+    if (oldVersion < 12) {
+      await db.execute("ALTER TABLE contact ADD COLUMN last_name TEXT;");
+    }
+    // Migration for version 12 to 13 (adding refrige_num column)
+    if (oldVersion < 13) {
+      await db.execute("ALTER TABLE contact ADD COLUMN refrige_num TEXT;");
+    }
+
+    db.setVersion(newVersion);
   }
 
   // Helper method to close the database

@@ -17,6 +17,7 @@ import '../helpers/otherHelpers.dart';
 import '../locale/MyLocalizations.dart';
 import '../models/contact_model.dart';
 import '../models/database.dart';
+import '../models/offline_manager.dart';
 import '../models/system.dart';
 import '../pages/forms.dart';
 
@@ -1221,13 +1222,22 @@ class _ContactsState extends State<Contacts> {
     );
   }
 
-  // Retrieve customers list from api
-  // Retrieve customers list from api
+  // Retrieve customers list from api or cache
   setCustomersList() async {
     setState(() {
       isLoading = true;
     });
+
     try {
+      // Check connectivity and offline mode
+      bool hasConnectivity = await Helper().checkConnectivity();
+      bool isOfflineMode = await OfflineManager().isOfflineMode;
+
+      if (!hasConnectivity || isOfflineMode) {
+        await _loadContactsFromCache();
+        return;
+      }
+
       final dio = Dio();
       var token = await System().getToken();
       dio.options.headers['content-Type'] = 'application/json';
@@ -1242,6 +1252,8 @@ class _ContactsState extends State<Contacts> {
           isLoading = (links['next'] != null) ? true : false;
           fetchCustomers = links['next'];
         });
+        // Cache data for offline access
+        await _cacheContacts(customers);
       } else {
         throw Exception('Failed to load customers');
       }
@@ -1255,6 +1267,51 @@ class _ContactsState extends State<Contacts> {
         toastLength: Toast.LENGTH_LONG,
       );
       print('Error fetching customers: $e');
+      // Fallback to cache if API fails
+      await _loadContactsFromCache();
+    }
+  }
+
+  // Load contacts from local cache
+  _loadContactsFromCache() async {
+    try {
+      final cachedContacts = await Contact().getAllContacts();
+      if (cachedContacts.isNotEmpty) {
+        setState(() {
+          customerList = cachedContacts;
+          isLoading = false;
+        });
+      } else {
+        setState(() {
+          isLoading = false;
+        });
+        Fluttertoast.showToast(
+          msg: AppLocalizations.of(context).translate('no_contacts_found_offline'),
+          backgroundColor: Colors.orange,
+          toastLength: Toast.LENGTH_SHORT,
+        );
+      }
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+      });
+      print('Error loading contacts from cache: $e');
+      Fluttertoast.showToast(
+        msg: AppLocalizations.of(context).translate('error_loading_cached_contacts'),
+        backgroundColor: Colors.red,
+        toastLength: Toast.LENGTH_LONG,
+      );
+    }
+  }
+
+  // Cache contacts data
+  _cacheContacts(List<dynamic> customers) async {
+    try {
+      for (var customerData in customers) {
+        await Contact().insertContact(Contact().contactModel(customerData));
+      }
+    } catch (e) {
+      print('Error caching contacts: $e');
     }
   }
 

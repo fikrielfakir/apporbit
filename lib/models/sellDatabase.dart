@@ -88,23 +88,23 @@ class SellDatabase {
         // Update quantities in sell_lines
         for (var returnedProduct in returnedProducts) {
           print('Updating product: $returnedProduct');
-          
+
           // Validate returned quantity doesn't exceed sold quantity
           var existingSellLine = await txn.query(
             'sell_lines',
             where: 'sell_id = ? AND product_id = ? AND variation_id = ?',
             whereArgs: [sellId, returnedProduct['product_id'], returnedProduct['variation_id']],
           );
-          
+
           if (existingSellLine.isNotEmpty) {
             double existingQty = double.tryParse(existingSellLine.first['quantity'].toString()) ?? 0.0;
             double returnQty = double.tryParse(returnedProduct['quantity'].toString()) ?? 0.0;
             double newQty = existingQty - returnQty;
-            
+
             if (newQty < 0) {
               throw Exception('Return quantity cannot exceed sold quantity');
             }
-            
+
             await txn.update(
               'sell_lines',
               {'quantity': newQty},
@@ -243,9 +243,9 @@ class SellDatabase {
       List<Map<String, dynamic>> productsWithFullDetails = [];
 
       for (var product in productsData) {
-        Map<String, dynamic> productMap = product is Map ? 
-          Map<String, dynamic>.from(product) : 
-          {'product_id': product};
+        Map<String, dynamic> productMap = product is Map ?
+        Map<String, dynamic>.from(product) :
+        {'product_id': product};
 
         if (productMap['product_id'] != null) {
           Map<String, dynamic> productDetails = await getProductDetails(productMap['product_id']);
@@ -312,9 +312,9 @@ class SellDatabase {
     try {
       // First check if products table exists
       List<Map<String, dynamic>> tables = await db.rawQuery(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='products'"
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='products'"
       );
-      
+
       String query;
       if (tables.isNotEmpty) {
         // Products table exists, use full query
@@ -359,7 +359,7 @@ class SellDatabase {
                AND VLD.location_id = $locationId
              WHERE $where''';
       }
-      
+
       List res = await db.rawQuery(query);
       return res;
     } catch (e) {

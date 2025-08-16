@@ -1,4 +1,3 @@
-
 import 'dart:async';
 import 'dart:convert';
 import 'package:date_time_picker/date_time_picker.dart';
@@ -15,6 +14,7 @@ import '../helpers/AppTheme.dart';
 import '../helpers/SizeConfig.dart';
 import '../helpers/otherHelpers.dart';
 import '../locale/MyLocalizations.dart';
+import '../models/offline_manager.dart';
 import '../models/paymentDatabase.dart';
 import '../models/sell.dart';
 import '../models/sellDatabase.dart';
@@ -194,7 +194,7 @@ class CheckOutState extends State<CheckOut> {
     try {
       sellDetail = await SellDatabase().getSellBySellId(sellId);
       this.sellId = argument!['sellId'];
-      
+
       if (sellDetail.isNotEmpty) {
         var sellData = sellDetail[0];
         shippingCharges.text = sellData['shipping_charges']?.toString() ?? '0';
@@ -204,7 +204,7 @@ class CheckOutState extends State<CheckOut> {
         returnAmountController.text = sellData['return_amount']?.toString() ?? '0';
         returnAmount = double.tryParse(sellData['return_amount']?.toString() ?? '0') ?? 0.0;
       }
-      
+
       payments = [];
       List paymentLines = await PaymentDatabase().get(sellId, allColumns: true);
       for (var element in paymentLines) {
@@ -240,33 +240,33 @@ class CheckOutState extends State<CheckOut> {
           child: (isLoading)
               ? Helper().loadingIndicator(context)
               : Column(
-                  children: [
-                    if (latitude != null && longitude != null)
-                      Padding(
-                        padding: EdgeInsets.all(MySize.size16!),
-                        child: Container(
-                          padding: EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.green.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.location_on, color: Colors.green, size: 16),
-                              SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'Location: ${latitude!.toStringAsFixed(4)}, ${longitude!.toStringAsFixed(4)}',
-                                  style: TextStyle(fontSize: 12, color: Colors.green[700]),
-                                ),
-                              ),
-                            ],
+            children: [
+              if (latitude != null && longitude != null)
+                Padding(
+                  padding: EdgeInsets.all(MySize.size16!),
+                  child: Container(
+                    padding: EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.location_on, color: Colors.green, size: 16),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Location: ${latitude!.toStringAsFixed(4)}, ${longitude!.toStringAsFixed(4)}',
+                            style: TextStyle(fontSize: 12, color: Colors.green[700]),
                           ),
                         ),
-                      ),
-                    paymentBox(),
-                  ],
+                      ],
+                    ),
+                  ),
                 ),
+              paymentBox(),
+            ],
+          ),
         ));
   }
 
@@ -443,7 +443,7 @@ class CheckOutState extends State<CheckOut> {
                                 initialValue: payments[index]['note'],
                                 decoration: InputDecoration(
                                     hintText:
-                                        AppLocalizations.of(context).translate('payment_note')),
+                                    AppLocalizations.of(context).translate('payment_note')),
                                 onChanged: (value) {
                                   payments[index]['note'] = value;
                                 }),
@@ -451,14 +451,14 @@ class CheckOutState extends State<CheckOut> {
                           Expanded(
                               child: (index > 0)
                                   ? IconButton(
-                                      icon: Icon(
-                                        MdiIcons.deleteForeverOutline,
-                                        size: MySize.size40,
-                                        color: Colors.red,
-                                      ),
-                                      onPressed: () {
-                                        alertConfirm(context, index);
-                                      })
+                                  icon: Icon(
+                                    MdiIcons.deleteForeverOutline,
+                                    size: MySize.size40,
+                                    color: Colors.red,
+                                  ),
+                                  onPressed: () {
+                                    alertConfirm(context, index);
+                                  })
                                   : Container())
                         ],
                       ),
@@ -846,7 +846,7 @@ class CheckOutState extends State<CheckOut> {
 
     // Get return amount from controller
     returnAmount = double.tryParse(returnAmountController.text) ?? 0.0;
-    
+
     // Adjust invoice amount with shipping and return amount
     double shippingAmount = double.tryParse(shippingCharges.text) ?? 0.0;
     double adjustedInvoiceAmount = (argument!['invoiceAmount'] ?? 0.0) + shippingAmount - returnAmount;
@@ -906,6 +906,10 @@ class CheckOutState extends State<CheckOut> {
       // Get return amount from controller
       returnAmount = double.tryParse(returnAmountController.text) ?? 0.0;
 
+      // Check connectivity and offline mode
+      bool hasConnectivity = await Helper().checkConnectivity();
+      bool isOfflineMode = await OfflineManager().isOfflineMode;
+
       Map<String, dynamic> sell = await Sell().createSell(
           invoiceNo: Config.userId.toString() + "_" + DateFormat('yMdHm').format(DateTime.now()),
           transactionDate: transactionDate,
@@ -932,6 +936,16 @@ class CheckOutState extends State<CheckOut> {
       if (sellId != null) {
         response = sellId;
         await SellDatabase().updateSells(sellId, sell).then((value) async {
+
+          // Queue for sync if offline
+          if (!hasConnectivity || isOfflineMode) {
+            await OfflineManager().queueOfflineAction('update_sale', {
+              'sell_id': sellId,
+              'sell_data': sell,
+              'payments': payments,
+            });
+          }
+
           for (var element in payments) {
             if (element['id'] != null) {
               paymentLine = {
@@ -955,7 +969,7 @@ class CheckOutState extends State<CheckOut> {
           if (deletedPaymentId.isNotEmpty) {
             PaymentDatabase().deletePaymentLineByIds(deletedPaymentId);
           }
-          if (await Helper().checkConnectivity()) {
+          if (hasConnectivity && !isOfflineMode) {
             await Sell().createApiSell(sellId: sellId).then((value) => printOption(response));
           } else {
             printOption(response);
@@ -965,7 +979,7 @@ class CheckOutState extends State<CheckOut> {
         response = await SellDatabase().storeSell(sell);
         Sell().makePayment(payments, response);
         SellDatabase().updateSellLine({'sell_id': response, 'is_completed': 1});
-        if (await Helper().checkConnectivity()) {
+        if (hasConnectivity && !isOfflineMode) {
           await Sell().createApiSell(sellId: response);
         }
         printOption(response);
@@ -985,7 +999,7 @@ class CheckOutState extends State<CheckOut> {
         List sellDetail = await SellDatabase().getSellBySellId(sellId);
         String? invoice = sellDetail.isNotEmpty ? sellDetail[0]['invoice_url'] : null;
         String invoiceNo = sellDetail.isNotEmpty ? sellDetail[0]['invoice_no'] ?? '' : '';
-        
+
         if (_printInvoice) {
           if (printWebInvoice && invoice != null) {
             final response = await http.Client().get(Uri.parse(invoice));

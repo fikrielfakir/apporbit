@@ -38,15 +38,15 @@ class FollowUpModel {
 
   submitFollowUp(
       {id,
-      contactId,
-      title,
-      scheduleType,
-      status,
-      followUpCategoryId,
-      startDate,
-      endDate,
-      description,
-      duration}) {
+        contactId,
+        title,
+        scheduleType,
+        status,
+        followUpCategoryId,
+        startDate,
+        endDate,
+        description,
+        duration}) {
     createFollowUpMap = {
       'title': title,
       'contact_id': contactId,
@@ -173,6 +173,11 @@ class Contact {
     }
   }
 
+  Future<List<Map<String, dynamic>>> getAllContacts() async {
+    final db = await DbProvider.db.database;
+    List<Map<String, dynamic>> result = await db.query("contact");
+    return result.map((row) => Map<String, dynamic>.from(row)).toList();
+  }
   //empty contact table
   emptyContact() async {
     final db = await dbProvider.database;
